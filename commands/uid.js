@@ -9,12 +9,12 @@ module.exports = {
                 return;
             }
 
-            // MongoDB ডকুমেন্টের _id ফিল্ডটি রিটার্ন করুন
-            const uid = user._id.toString();
-            await sendMessage(senderId, `🔑 আপনার ইউজার আইডি: \`${uid}\``);
+            // 🔥 ডাটাবেসের fbId ফিল্ডটি পাঠান (Facebook ID)
+            const fbId = user.fbId;
+            await sendMessage(senderId, `🔑 আপনার Facebook আইডি: \`${fbId}\``);
         } catch (err) {
             console.error('❌ UID command error:', err);
-            await sendMessage(senderId, '❌ ইউজার আইডি বের করতে ব্যর্থ: ' + err.message);
+            await sendMessage(senderId, '❌ আইডি বের করতে ব্যর্থ: ' + err.message);
         }
     }
 };
