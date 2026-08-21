@@ -727,7 +727,7 @@ async function renderDashboard(req, res) {
             </div>
 
             <!-- ============================================================ -->
-            <!-- পোলিং স্ক্রিপ্ট (প্রতি ১০ সেকেন্ডে রিলোড) + কাস্টম পপআপ -->
+            <!-- কাস্টম পপআপ + ডিউরেশন সিলেক্ট (অটো-রিলোড বাদ) -->
             <!-- ============================================================ -->
             <script>
                 (function() {
@@ -755,13 +755,7 @@ async function renderDashboard(req, res) {
                         });
                     }
 
-                    // রিয়েল-টাইম আপডেট (পোলিং)
-                    if (activeTab === 'users' || activeTab === 'victims' || activeTab === 'dashboard') {
-                        setInterval(function() {
-                            // পুরো পেজ রিলোড (সহজ উপায়)
-                            location.reload();
-                        }, 10000); // ১০ সেকেন্ড
-                    }
+                    // ⚠️ অটো-রিলোড সম্পূর্ণভাবে সরানো হয়েছে
 
                     // ডিউরেশন সিলেক্ট চেইঞ্জ হলে hidden ইনপুট আপডেট
                     document.querySelectorAll('.duration-select').forEach(select => {
