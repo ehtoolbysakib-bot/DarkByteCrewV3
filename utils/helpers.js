@@ -310,9 +310,6 @@ function formatLocationMessage(gpsLocation) {
            `🔗 গুগল ম্যাপ: ${mapLink}`;
 }
 
-// ================================================================
-// এক্সপোর্ট
-// ================================================================
 module.exports = {
     getConfig,
     getLocalConfig,

